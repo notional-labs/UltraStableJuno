@@ -21,8 +21,8 @@ pub enum ExecuteMsg {
         amount: Uint128,
     },
     SetAddresses {
-        trove_manager_address: Addr,
-        active_pool_address: Addr,
+        trove_manager_address: String,
+        active_pool_address: String,
     },
 }
 

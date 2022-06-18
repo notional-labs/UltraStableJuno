@@ -11,7 +11,9 @@ use cw2::set_contract_version;
 
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InstantiateMsg, ParamsResponse, QueryMsg};
-use crate::state::{SudoParams, ADDRESSES_SET, ASSETS_IN_POOL, SUDO_PARAMS};
+use crate::state::{
+    AddressesSet, AssetsInPool, SudoParams, ADDRESSES_SET, ASSETS_IN_POOL, SUDO_PARAMS,
+};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:default-pool";
@@ -28,12 +30,20 @@ pub fn instantiate(
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
-    // store contract info
+    // store sudo params
     let data = SudoParams {
         name: msg.name,
         owner: deps.api.addr_validate(&msg.owner)?,
     };
+
+    // initial assets in pool
+    let assets_in_pool = AssetsInPool {
+        juno: Uint128::zero(),
+        usj_debt: Uint128::zero(),
+    };
+
     SUDO_PARAMS.save(deps.storage, &data)?;
+    ASSETS_IN_POOL.save(deps.storage, &assets_in_pool)?;
 
     Ok(Response::default())
 }
@@ -132,17 +142,17 @@ pub fn execute_set_addresses(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
-    trove_manager_address: Addr,
-    active_pool_address: Addr,
+    trove_manager_address: String,
+    active_pool_address: String,
 ) -> Result<Response, ContractError> {
     only_owner(deps.storage, &info)?;
 
-    let mut addresses_set = ADDRESSES_SET.load(deps.storage)?;
+    let new_addresses_set = AddressesSet {
+        trove_manager_address: deps.api.addr_validate(&trove_manager_address)?,
+        active_pool_address: deps.api.addr_validate(&active_pool_address)?,
+    };
 
-    addresses_set.trove_manager_address = trove_manager_address.clone();
-    addresses_set.active_pool_address = active_pool_address.clone();
-
-    ADDRESSES_SET.save(deps.storage, &addresses_set)?;
+    ADDRESSES_SET.save(deps.storage, &new_addresses_set)?;
     let res = Response::new()
         .add_attribute("action", "set_addresses")
         .add_attribute("trove_manager_address", trove_manager_address)
