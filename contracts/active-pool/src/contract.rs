@@ -11,7 +11,9 @@ use cw2::set_contract_version;
 
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InstantiateMsg, ParamsResponse, QueryMsg};
-use crate::state::{SudoParams, ADDRESSES_SET, ASSETS_IN_POOL, SUDO_PARAMS};
+use crate::state::{
+    AddressesSet, AssetsInPool, SudoParams, ADDRESSES_SET, ASSETS_IN_POOL, SUDO_PARAMS,
+};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:active-pool";
@@ -28,12 +30,20 @@ pub fn instantiate(
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
-    // store contract info
-    let data = SudoParams {
+    // store sudo params
+    let sudo_params = SudoParams {
         name: msg.name,
         owner: deps.api.addr_validate(&msg.owner)?,
     };
-    SUDO_PARAMS.save(deps.storage, &data)?;
+
+    // initial assets in pool
+    let assets_in_pool = AssetsInPool {
+        juno: Uint128::zero(),
+        usj_debt: Uint128::zero(),
+    };
+
+    SUDO_PARAMS.save(deps.storage, &sudo_params)?;
+    ASSETS_IN_POOL.save(deps.storage, &assets_in_pool)?;
 
     Ok(Response::default())
 }
@@ -140,21 +150,21 @@ pub fn execute_set_addresses(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
-    borrower_operations_address: Addr,
-    trove_manager_address: Addr,
-    stability_pool_address: Addr,
-    default_pool_address: Addr,
+    borrower_operations_address: String,
+    trove_manager_address: String,
+    stability_pool_address: String,
+    default_pool_address: String,
 ) -> Result<Response, ContractError> {
     only_owner(deps.storage, &info)?;
 
-    let mut addresses_set = ADDRESSES_SET.load(deps.storage)?;
+    let new_addresses_set = AddressesSet {
+        borrower_operations_address: deps.api.addr_validate(&borrower_operations_address)?,
+        trove_manager_address: deps.api.addr_validate(&trove_manager_address)?,
+        stability_pool_address: deps.api.addr_validate(&stability_pool_address)?,
+        default_pool_address: deps.api.addr_validate(&default_pool_address)?,
+    };
 
-    addresses_set.borrower_operations_address = borrower_operations_address.clone();
-    addresses_set.trove_manager_address = trove_manager_address.clone();
-    addresses_set.stability_pool_address = stability_pool_address.clone();
-    addresses_set.default_pool_address = default_pool_address.clone();
-
-    ADDRESSES_SET.save(deps.storage, &addresses_set)?;
+    ADDRESSES_SET.save(deps.storage, &new_addresses_set)?;
     let res = Response::new()
         .add_attribute("action", "set_addresses")
         .add_attribute("borrower_operations_address", borrower_operations_address)

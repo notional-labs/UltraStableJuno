@@ -22,10 +22,10 @@ pub enum ExecuteMsg {
         amount: Uint128,
     },
     SetAddresses {
-        borrower_operations_address: Addr,
-        trove_manager_address: Addr,
-        stability_pool_address: Addr,
-        default_pool_address: Addr,
+        borrower_operations_address: String,
+        trove_manager_address: String,
+        stability_pool_address: String,
+        default_pool_address: String,
     },
 }
 

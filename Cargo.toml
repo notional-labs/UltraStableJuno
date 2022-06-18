@@ -1,5 +1,17 @@
 [workspace]
-members = ["contracts/*"]
+members = ["contracts/*", "packages/*"]
+
+[profile.release.package.usj-token]
+codegen-units = 1
+incremental = false
+
+[profile.release.package.active-pool]
+codegen-units = 1
+incremental = false
+
+[profile.release.package.default-pool]
+codegen-units = 1
+incremental = false
 
 [profile.release]
 codegen-units = 1
