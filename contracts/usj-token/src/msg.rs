@@ -127,8 +127,6 @@ pub enum ExecuteMsg {
         receiver: String,
         amount: Uint128,
     },
-    /// Only with "approval" extension. Destroys tokens forever
-    BurnFrom { owner: String, amount: Uint128 },
     /// Only with the "mintable" extension. If authorized, creates amount new tokens
     /// and adds to the recipient balance.
     Mint { recipient: String, amount: Uint128 },

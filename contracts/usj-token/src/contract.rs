@@ -11,7 +11,7 @@ use cw20::{
 };
 
 use crate::allowances::{
-    execute_burn_from, execute_decrease_allowance, execute_increase_allowance, execute_send_from,
+    execute_decrease_allowance, execute_increase_allowance, execute_send_from,
     execute_transfer_from, query_allowance,
 };
 use crate::enumerable::{query_all_accounts, query_all_allowances};
@@ -212,7 +212,6 @@ pub fn execute(
             recipient,
             amount,
         } => execute_transfer_from(deps, env, info, owner, recipient, amount),
-        ExecuteMsg::BurnFrom { owner, amount } => execute_burn_from(deps, env, info, owner, amount),
         ExecuteMsg::SendFrom {
             owner,
             contract,
@@ -283,6 +282,11 @@ pub fn execute_burn(
 ) -> Result<Response, ContractError> {
     if amount == Uint128::zero() {
         return Err(ContractError::InvalidZeroAmount {});
+    }
+
+    let config = TOKEN_INFO.load(deps.storage)?;
+    if config.mint.is_none() || config.mint.as_ref().unwrap().minter != info.sender {
+        return Err(ContractError::Unauthorized {});
     }
 
     // lower balance
@@ -1069,10 +1073,11 @@ mod tests {
         let burn = Uint128::from(76543u128);
         let too_much = Uint128::from(12340321u128);
 
-        do_instantiate(deps.as_mut(), &addr1, amount1);
+        let minter = String::from("asmodat");
+        do_instantiate_with_minter(deps.as_mut(), &minter, amount1, &minter, None);
 
         // cannot burn nothing
-        let info = mock_info(addr1.as_ref(), &[]);
+        let info = mock_info(minter.as_ref(), &[]);
         let env = mock_env();
         let msg = ExecuteMsg::Burn {
             amount: Uint128::zero(),
@@ -1084,8 +1089,21 @@ mod tests {
             amount1
         );
 
-        // cannot burn more than we have
+        // non-minter cannot burn
         let info = mock_info(addr1.as_ref(), &[]);
+        let env = mock_env();
+        let msg = ExecuteMsg::Burn {
+            amount: Uint128::new(1u128),
+        };
+        let err = execute(deps.as_mut(), env, info, msg).unwrap_err();
+        assert_eq!(err, ContractError::Unauthorized {});
+        assert_eq!(
+            query_token_info(deps.as_ref()).unwrap().total_supply,
+            amount1
+        );
+
+        // cannot burn more than we have
+        let info = mock_info(minter.as_ref(), &[]);
         let env = mock_env();
         let msg = ExecuteMsg::Burn { amount: too_much };
         let err = execute(deps.as_mut(), env, info, msg).unwrap_err();
@@ -1096,14 +1114,14 @@ mod tests {
         );
 
         // valid burn reduces total supply
-        let info = mock_info(addr1.as_ref(), &[]);
+        let info = mock_info(minter.as_ref(), &[]);
         let env = mock_env();
         let msg = ExecuteMsg::Burn { amount: burn };
         let res = execute(deps.as_mut(), env, info, msg).unwrap();
         assert_eq!(res.messages.len(), 0);
 
         let remainder = amount1.checked_sub(burn).unwrap();
-        assert_eq!(get_balance(deps.as_ref(), addr1), remainder);
+        assert_eq!(get_balance(deps.as_ref(), minter), remainder);
         assert_eq!(
             query_token_info(deps.as_ref()).unwrap().total_supply,
             remainder

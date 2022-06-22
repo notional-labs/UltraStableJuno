@@ -208,5 +208,3 @@ fn test_increase_decrease_usj_debt() {
 
     assert_eq!(usj_debt, Uint128::new(50u128));
 }
-
-

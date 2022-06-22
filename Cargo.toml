@@ -1,5 +1,5 @@
 [workspace]
-members = ["contracts/*", "packages/*"]
+members = ["contracts/*"]
 
 [profile.release.package.usj-token]
 codegen-units = 1

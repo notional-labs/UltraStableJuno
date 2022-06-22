@@ -5,7 +5,7 @@ use cosmwasm_std::{
 use cw20::{AllowanceResponse, Cw20ReceiveMsg, Expiration};
 
 use crate::error::ContractError;
-use crate::state::{ALLOWANCES, BALANCES, TOKEN_INFO};
+use crate::state::{ALLOWANCES, BALANCES};
 
 pub fn execute_increase_allowance(
     deps: DepsMut,
@@ -139,42 +139,6 @@ pub fn execute_transfer_from(
         attr("action", "transfer_from"),
         attr("from", owner),
         attr("to", recipient),
-        attr("by", info.sender),
-        attr("amount", amount),
-    ]);
-    Ok(res)
-}
-
-pub fn execute_burn_from(
-    deps: DepsMut,
-
-    env: Env,
-    info: MessageInfo,
-    owner: String,
-    amount: Uint128,
-) -> Result<Response, ContractError> {
-    let owner_addr = deps.api.addr_validate(&owner)?;
-
-    // deduct allowance before doing anything else have enough allowance
-    deduct_allowance(deps.storage, &owner_addr, &info.sender, &env.block, amount)?;
-
-    // lower balance
-    BALANCES.update(
-        deps.storage,
-        &owner_addr,
-        |balance: Option<Uint128>| -> StdResult<_> {
-            Ok(balance.unwrap_or_default().checked_sub(amount)?)
-        },
-    )?;
-    // reduce total_supply
-    TOKEN_INFO.update(deps.storage, |mut meta| -> StdResult<_> {
-        meta.total_supply = meta.total_supply.checked_sub(amount)?;
-        Ok(meta)
-    })?;
-
-    let res = Response::new().add_attributes(vec![
-        attr("action", "burn_from"),
-        attr("from", owner),
         attr("by", info.sender),
         attr("amount", amount),
     ]);
@@ -555,82 +519,6 @@ mod tests {
         let msg = ExecuteMsg::TransferFrom {
             owner,
             recipient: rcpt,
-            amount: Uint128::new(33443),
-        };
-        let info = mock_info(spender.as_ref(), &[]);
-        let env = mock_env();
-        let err = execute(deps.as_mut(), env, info, msg).unwrap_err();
-        assert_eq!(err, ContractError::Expired {});
-    }
-
-    #[test]
-    fn burn_from_respects_limits() {
-        let mut deps = mock_dependencies_with_balance(&[]);
-        let owner = String::from("addr0001");
-        let spender = String::from("addr0002");
-
-        let start = Uint128::new(999999);
-        do_instantiate(deps.as_mut(), &owner, start);
-
-        // provide an allowance
-        let allow1 = Uint128::new(77777);
-        let msg = ExecuteMsg::IncreaseAllowance {
-            spender: spender.clone(),
-            amount: allow1,
-            expires: None,
-        };
-        let info = mock_info(owner.as_ref(), &[]);
-        let env = mock_env();
-        execute(deps.as_mut(), env, info, msg).unwrap();
-
-        // valid burn of part of the allowance
-        let transfer = Uint128::new(44444);
-        let msg = ExecuteMsg::BurnFrom {
-            owner: owner.clone(),
-            amount: transfer,
-        };
-        let info = mock_info(spender.as_ref(), &[]);
-        let env = mock_env();
-        let res = execute(deps.as_mut(), env, info, msg).unwrap();
-        assert_eq!(res.attributes[0], attr("action", "burn_from"));
-
-        // make sure money burnt
-        assert_eq!(
-            get_balance(deps.as_ref(), owner.clone()),
-            start.checked_sub(transfer).unwrap()
-        );
-
-        // ensure it looks good
-        let allowance = query_allowance(deps.as_ref(), owner.clone(), spender.clone()).unwrap();
-        let expect = AllowanceResponse {
-            allowance: allow1.checked_sub(transfer).unwrap(),
-            expires: Expiration::Never {},
-        };
-        assert_eq!(expect, allowance);
-
-        // cannot burn more than the allowance
-        let msg = ExecuteMsg::BurnFrom {
-            owner: owner.clone(),
-            amount: Uint128::new(33443),
-        };
-        let info = mock_info(spender.as_ref(), &[]);
-        let env = mock_env();
-        let err = execute(deps.as_mut(), env, info, msg).unwrap_err();
-        assert!(matches!(err, ContractError::Std(StdError::Overflow { .. })));
-
-        // let us increase limit, but set the expiration (default env height is 12_345)
-        let info = mock_info(owner.as_ref(), &[]);
-        let env = mock_env();
-        let msg = ExecuteMsg::IncreaseAllowance {
-            spender: spender.clone(),
-            amount: Uint128::new(1000),
-            expires: Some(Expiration::AtHeight(env.block.height)),
-        };
-        execute(deps.as_mut(), env, info, msg).unwrap();
-
-        // we should now get the expiration error
-        let msg = ExecuteMsg::BurnFrom {
-            owner,
             amount: Uint128::new(33443),
         };
         let info = mock_info(spender.as_ref(), &[]);
