@@ -1,12 +1,11 @@
 use crate::asset::{AssetInfo, PoolInfo};
 
-use wasmswap::msg::{QueryMsg as WasmSwapMsg, InfoResponse};
 use cosmwasm_std::{
-    Addr, AllBalanceResponse, BankQuery, Coin, QuerierWrapper, QueryRequest, StdResult,
-    Uint128,
+    Addr, AllBalanceResponse, BankQuery, Coin, QuerierWrapper, QueryRequest, StdResult, Uint128,
 };
+use wasmswap::msg::{InfoResponse, QueryMsg as WasmSwapMsg};
 
-use cw20::{BalanceResponse as Cw20BalanceResponse, Cw20QueryMsg, TokenInfoResponse, Denom};
+use cw20::{BalanceResponse as Cw20BalanceResponse, Cw20QueryMsg, Denom, TokenInfoResponse};
 
 const NATIVE_TOKEN_PRECISION: u8 = 6;
 
@@ -92,37 +91,27 @@ pub fn query_pool_info(
     querier: &QuerierWrapper,
     pool_contract_addr: String,
 ) -> StdResult<PoolInfo> {
-    let pool_info: InfoResponse = querier.query_wasm_smart(
-        pool_contract_addr.clone(),
-        &WasmSwapMsg::Info {}
-    )?;
+    let pool_info: InfoResponse =
+        querier.query_wasm_smart(pool_contract_addr.clone(), &WasmSwapMsg::Info {})?;
 
     let token1_denom: AssetInfo = match pool_info.token1_denom {
-        Denom::Native(denom) => {
-            AssetInfo::NativeToken { denom }
-        },
-        Denom::Cw20(contract_addr) => {
-            AssetInfo::Cw20Token { contract_addr }
-        }
+        Denom::Native(denom) => AssetInfo::NativeToken { denom },
+        Denom::Cw20(contract_addr) => AssetInfo::Cw20Token { contract_addr },
     };
 
     let token2_denom: AssetInfo = match pool_info.token2_denom {
-        Denom::Native(denom) => {
-            AssetInfo::NativeToken { denom }
-        },
-        Denom::Cw20(contract_addr) => {
-            AssetInfo::Cw20Token { contract_addr }
-        }
+        Denom::Native(denom) => AssetInfo::NativeToken { denom },
+        Denom::Cw20(contract_addr) => AssetInfo::Cw20Token { contract_addr },
     };
 
     let res = PoolInfo {
         token1_reserve: pool_info.token1_reserve,
-        token1_denom: token1_denom,
+        token1_denom,
         token2_reserve: pool_info.token2_reserve,
-        token2_denom: token2_denom,
-        pool_contract_addr: pool_contract_addr,
+        token2_denom,
+        pool_contract_addr,
         lp_token_address: pool_info.lp_token_address,
-        lp_token_supply: pool_info.lp_token_supply
+        lp_token_supply: pool_info.lp_token_supply,
     };
     Ok(res)
 }

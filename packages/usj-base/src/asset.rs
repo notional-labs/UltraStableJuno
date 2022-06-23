@@ -212,3 +212,24 @@ pub struct PoolInfo {
     pub lp_token_address: String,
     pub lp_token_supply: Uint128,
 }
+
+impl PoolInfo {
+    /// Returns the balance for each asset in the pool.
+    pub fn query_pools(
+        &self,
+        querier: &QuerierWrapper,
+        contract_addr: impl Into<String>,
+    ) -> StdResult<[Asset; 2]> {
+        let contract_addr = contract_addr.into();
+        Ok([
+            Asset {
+                amount: self.token1_denom.query_pool(querier, &contract_addr)?,
+                info: self.token1_denom.clone(),
+            },
+            Asset {
+                amount: self.token2_denom.query_pool(querier, contract_addr)?,
+                info: self.token2_denom.clone(),
+            },
+        ])
+    }
+}
