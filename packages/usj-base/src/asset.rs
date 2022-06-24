@@ -4,8 +4,8 @@ use std::fmt;
 
 use crate::querier::{query_balance, query_token_balance};
 use cosmwasm_std::{
-    coin, to_binary, Addr, Api, BankMsg, CosmosMsg, MessageInfo, QuerierWrapper, StdError,
-    StdResult, Uint128, WasmMsg,
+    coin, to_binary, Addr, BankMsg, CosmosMsg, MessageInfo, QuerierWrapper, StdError, StdResult,
+    Uint128, WasmMsg,
 };
 use cw20::Cw20ExecuteMsg;
 
@@ -140,43 +140,6 @@ impl AssetInfo {
             AssetInfo::Cw20Token { contract_addr } => contract_addr.as_bytes(),
         }
     }
-
-    /// Returns [`Ok`] if the token of type [`AssetInfo`] is in lowercase and valid. Otherwise returns [`Err`].
-    pub fn check(&self, api: &dyn Api) -> StdResult<()> {
-        match self {
-            AssetInfo::Cw20Token { contract_addr } => {
-                addr_validate_to_lower(api, contract_addr.as_str())?;
-            }
-            AssetInfo::NativeToken { denom } => {
-                if !denom.starts_with("ibc/") && denom != &denom.to_lowercase() {
-                    return Err(StdError::generic_err(format!(
-                        "Non-IBC token denom {} should be lowercase",
-                        denom
-                    )));
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
-/// Returns a lowercased, validated address upon success. Otherwise returns [`Err`]
-pub fn addr_validate_to_lower(api: &dyn Api, addr: impl Into<String>) -> StdResult<Addr> {
-    let addr = addr.into();
-    if addr.to_lowercase() != addr {
-        return Err(StdError::generic_err(format!(
-            "Address {} should be lowercase",
-            addr
-        )));
-    }
-    api.addr_validate(&addr)
-}
-
-/// Returns a lowercased, validated address upon success if present. Otherwise returns [`None`].
-pub fn addr_opt_validate(api: &dyn Api, addr: &Option<String>) -> StdResult<Option<Addr>> {
-    addr.as_ref()
-        .map(|addr| addr_validate_to_lower(api, addr))
-        .transpose()
 }
 
 pub fn native_asset(denom: String, amount: Uint128) -> Asset {
@@ -208,7 +171,6 @@ pub struct PoolInfo {
     pub token1_denom: AssetInfo,
     pub token2_reserve: Uint128,
     pub token2_denom: AssetInfo,
-    pub pool_contract_addr: String,
     pub lp_token_address: String,
     pub lp_token_supply: Uint128,
 }

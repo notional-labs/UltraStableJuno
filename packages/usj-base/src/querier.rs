@@ -87,12 +87,9 @@ pub fn query_token_precision(querier: &QuerierWrapper, asset_info: &AssetInfo) -
 }
 
 /// Returns JunoSwap pool information.
-pub fn query_pool_info(
-    querier: &QuerierWrapper,
-    pool_contract_addr: String,
-) -> StdResult<PoolInfo> {
+pub fn query_pool_info(querier: &QuerierWrapper, pool_contract_addr: Addr) -> StdResult<PoolInfo> {
     let pool_info: InfoResponse =
-        querier.query_wasm_smart(pool_contract_addr.clone(), &WasmSwapMsg::Info {})?;
+        querier.query_wasm_smart(pool_contract_addr, &WasmSwapMsg::Info {})?;
 
     let token1_denom: AssetInfo = match pool_info.token1_denom {
         Denom::Native(denom) => AssetInfo::NativeToken { denom },
@@ -109,7 +106,6 @@ pub fn query_pool_info(
         token1_denom,
         token2_reserve: pool_info.token2_reserve,
         token2_denom,
-        pool_contract_addr,
         lp_token_address: pool_info.lp_token_address,
         lp_token_supply: pool_info.lp_token_supply,
     };
