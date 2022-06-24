@@ -1,17 +1,17 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use cosmwasm_std::{Addr, Decimal, Uint128};
+use cosmwasm_std::{Addr, Decimal256, Uint128};
 use cw_storage_plus::Item;
-use usj_base::asset::{PoolInfo, AssetInfo};
+use usj_base::asset::{AssetInfo, PoolInfo};
 
 /// This structure stores the latest cumulative and average token prices for the target pool
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct PriceCumulativeLast {
     pub price1_cumulative_last: Uint128,
     pub price2_cumulative_last: Uint128,
-    pub price_1_average: Decimal,
-    pub price_2_average: Decimal,
+    pub price_1_average: Decimal256,
+    pub price_2_average: Decimal256,
     pub block_timestamp_last: u64,
 }
 

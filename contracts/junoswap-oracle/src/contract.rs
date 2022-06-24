@@ -1,13 +1,13 @@
 use crate::error::ContractError;
 use crate::state::{Config, PriceCumulativeLast, CONFIG, PRICE_LAST};
 use cosmwasm_std::{
-    entry_point, to_binary, Binary, Decimal, Deps, DepsMut, Env, MessageInfo, Response, StdError,
-    StdResult, Uint128,
+    entry_point, to_binary, Binary, Decimal256, Deps, DepsMut, Env, MessageInfo, Response,
+    StdError, StdResult, Uint128, Uint256,
 };
 use cw2::set_contract_version;
 use usj_base::asset::{AssetInfo, PoolInfo};
 use usj_base::oracle::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
-use usj_base::querier::{query_pool_info};
+use usj_base::querier::query_pool_info;
 
 const CONTRACT_NAME: &str = "junoswap-oracle";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -43,8 +43,8 @@ pub fn instantiate(
     let init_price = PriceCumulativeLast {
         price1_cumulative_last: Uint128::zero(),
         price2_cumulative_last: Uint128::zero(),
-        price_1_average: Decimal::zero(),
-        price_2_average: Decimal::zero(),
+        price_1_average: Decimal256::zero(),
+        price_2_average: Decimal256::zero(),
         block_timestamp_last: env.block.time.seconds(),
     };
     PRICE_LAST.save(deps.storage, &init_price)?;
@@ -94,13 +94,13 @@ pub fn update(deps: DepsMut, env: Env) -> Result<Response, ContractError> {
             .multiply_ratio(x, y),
     );
 
-    let price_1_average = Decimal::from_ratio(
-        price1_cumulative_new.wrapping_sub(price_last.price1_cumulative_last),
+    let price_1_average = Decimal256::from_ratio(
+        Uint256::from(price1_cumulative_new.wrapping_sub(price_last.price1_cumulative_last)),
         time_elapsed,
     );
 
-    let price_2_average = Decimal::from_ratio(
-        price2_cumulative_new.wrapping_sub(price_last.price2_cumulative_last),
+    let price_2_average = Decimal256::from_ratio(
+        Uint256::from(price2_cumulative_new.wrapping_sub(price_last.price2_cumulative_last)),
         time_elapsed,
     );
 
@@ -123,10 +123,10 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 }
 
 /// Multiplies a token amount by its latest TWAP value and returns the result as a [`Uint256`] if the operation was successful
-fn consult(deps: Deps, token: AssetInfo, amount: Uint128) -> Result<Uint128, StdError> {
+fn consult(deps: Deps, token: AssetInfo, amount: Uint128) -> Result<Uint256, StdError> {
     let config = CONFIG.load(deps.storage)?;
     let price_last = PRICE_LAST.load(deps.storage)?;
-    let price_precision = Uint128::from(10_u128.pow(TWAP_PRECISION.into()));
+    let price_precision = Uint256::from(10_u128.pow(TWAP_PRECISION.into()));
 
     let price_average = if config.asset_infos[0].equal(&token) {
         price_last.price_1_average
@@ -136,7 +136,7 @@ fn consult(deps: Deps, token: AssetInfo, amount: Uint128) -> Result<Uint128, Std
         return Err(StdError::generic_err("Invalid Token"));
     };
 
-    Ok(amount * price_average / price_precision)
+    Ok(Uint256::from(amount) * price_average / price_precision)
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
