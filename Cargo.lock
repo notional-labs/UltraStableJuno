@@ -13,6 +13,7 @@ dependencies = [
  "schemars",
  "serde",
  "thiserror",
+ "usj-base",
 ]
 
 [[package]]
@@ -46,6 +47,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4152116fd6e9dadb291ae18fc1ec3575ed6d84c29642d97890f4b4a3417297e4"
 dependencies = [
  "generic-array",
+]
+
+[[package]]
+name = "borrower-operations"
+version = "0.1.0"
+dependencies = [
+ "cosmwasm-std",
+ "cw-multi-test",
+ "cw-storage-plus 0.13.4",
+ "cw2 0.13.4",
+ "schemars",
+ "serde",
+ "thiserror",
 ]
 
 [[package]]
@@ -343,6 +357,7 @@ dependencies = [
  "schemars",
  "serde",
  "thiserror",
+ "usj-base",
 ]
 
 [[package]]
