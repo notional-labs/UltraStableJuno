@@ -1,8 +1,9 @@
 use crate::{
     contract::{instantiate, NATIVE_JUNO_DENOM},
-    msg::{ExecuteMsg, InstantiateMsg, ParamsResponse, QueryMsg, SudoMsg},
     ContractError,
 };
+
+use usj_base::active_pool::{ExecuteMsg, InstantiateMsg, ParamsResponse, QueryMsg, SudoMsg};
 
 use cosmwasm_std::{Addr, Empty, Uint128};
 use cw_multi_test::{App, Contract, ContractWrapper, Executor};

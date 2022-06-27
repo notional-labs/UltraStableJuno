@@ -1,5 +1,5 @@
 use crate::error::ContractError;
-use crate::msg::SudoMsg;
+use usj_base::default_pool::SudoMsg;
 use crate::state::SUDO_PARAMS;
 use cosmwasm_std::{entry_point, Addr, DepsMut, Env, Response};
 

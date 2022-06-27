@@ -10,7 +10,7 @@ use cosmwasm_std::{
 use cw2::set_contract_version;
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, InstantiateMsg, ParamsResponse, QueryMsg};
+use usj_base::default_pool::{ExecuteMsg, InstantiateMsg, ParamsResponse, QueryMsg};
 use crate::state::{
     AddressesSet, AssetsInPool, SudoParams, ADDRESSES_SET, ASSETS_IN_POOL, SUDO_PARAMS,
 };
