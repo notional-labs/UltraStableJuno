@@ -1,13 +1,29 @@
+use crate::active_pool::QueryMsg as ActivePoolQueryMsg;
 use crate::asset::{AssetInfo, PoolInfo};
+use crate::default_pool::QueryMsg as DefaultPoolQueryMsg;
+use crate::usj_math;
 
 use cosmwasm_std::{
-    Addr, AllBalanceResponse, BankQuery, Coin, QuerierWrapper, QueryRequest, StdResult, Uint128,
+    Addr, AllBalanceResponse, BankQuery, Coin, Decimal256, QuerierWrapper, QueryRequest, StdError,
+    StdResult, Uint128, Uint256,
 };
 use wasmswap::msg::{InfoResponse, QueryMsg as WasmSwapMsg};
 
 use cw20::{BalanceResponse as Cw20BalanceResponse, Cw20QueryMsg, Denom, TokenInfoResponse};
 
 const NATIVE_TOKEN_PRECISION: u8 = 6;
+
+// Minimum collateral ratio for individual troves
+pub const MCR: Decimal256 = Decimal256::new(Uint256::from_u128(1100_000_000_000_000_000u128));
+
+// Critical system collateral ratio. If the system's total collateral ratio (TCR) falls below the CCR, Recovery Mode is triggered.
+pub const CCR: Decimal256 = Decimal256::new(Uint256::from_u128(1500_000_000_000_000_000u128));
+
+// Minimum amount of net USJ debt a trove must have
+pub const MIN_NET_DEBT: Uint128 = Uint128::new(2000u128);
+
+pub const BORROWING_FEE_FLOOR: Decimal256 =
+    Decimal256::new(Uint256::from_u128(5_000_000_000_000_000u128)); // 0.5%
 
 /// Returns a native token's balance for a specific account.
 pub fn query_balance(
@@ -110,4 +126,48 @@ pub fn query_pool_info(querier: &QuerierWrapper, pool_contract_addr: Addr) -> St
         lp_token_supply: pool_info.lp_token_supply,
     };
     Ok(res)
+}
+
+pub fn query_entire_system_coll(
+    querier: &QuerierWrapper,
+    active_pool_addr: Addr,
+    default_pool_addr: Addr,
+) -> StdResult<Uint128> {
+    let active_coll: Uint128 =
+        querier.query_wasm_smart(active_pool_addr, &ActivePoolQueryMsg::GetJUNO {})?;
+    let liquidated_coll: Uint128 =
+        querier.query_wasm_smart(default_pool_addr, &DefaultPoolQueryMsg::GetJUNO {})?;
+    let total = active_coll
+        .checked_add(liquidated_coll)
+        .map_err(StdError::overflow)?;
+
+    Ok(total)
+}
+
+pub fn query_entire_system_debt(
+    querier: &QuerierWrapper,
+    active_pool_addr: Addr,
+    default_pool_addr: Addr,
+) -> StdResult<Uint128> {
+    let active_debt: Uint128 =
+        querier.query_wasm_smart(active_pool_addr, &ActivePoolQueryMsg::GetUSJDebt {})?;
+    let liquidated_debt: Uint128 =
+        querier.query_wasm_smart(default_pool_addr, &DefaultPoolQueryMsg::GetUSJDebt {})?;
+    let total = active_debt
+        .checked_add(liquidated_debt)
+        .map_err(StdError::overflow)?;
+
+    Ok(total)
+}
+
+pub fn get_tcr(querier: &QuerierWrapper, price: Decimal256, active_pool_addr: Addr, default_pool_addr: Addr) -> StdResult<Decimal256> {
+    let entire_system_coll = query_entire_system_debt(querier, active_pool_addr.clone(), default_pool_addr.clone()).unwrap();
+    let entire_system_debt = query_entire_system_coll(querier, active_pool_addr, default_pool_addr).unwrap();
+    let tcr = usj_math::compute_cr(entire_system_coll, entire_system_debt, price).unwrap();
+    Ok(tcr)
+}
+
+pub fn check_recovery_mode(querier: &QuerierWrapper,price: Decimal256, active_pool_addr: Addr, default_pool_addr: Addr) -> bool {
+    let tcr = get_tcr(querier, price, active_pool_addr, default_pool_addr).unwrap();
+    return tcr < CCR;
 }
