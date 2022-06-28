@@ -1,0 +1,30 @@
+[package]
+name = "coll-surplus-pool"
+version = "0.1.0"
+authors = ["Chinh D.Nguyen <eyescryptoinsights@gmail.com>"]
+edition = "2021"
+
+description = "The Coll Surplus Pool holds the JUNO surplus from Troves that have been fully redeemed from as well as from Troves with an ICR > MCR that were liquidated in Recovery Mode."
+repository = "https://github.com/notional-labs/USJ"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+backtraces = ["cosmwasm-std/backtraces"]
+# use library feature to disable all instantiate/execute/query exports
+library = []
+
+[dependencies]
+cw2 = { version = "0.13.4" }
+cosmwasm-std = { version = "1.0.0" }
+cw-storage-plus = { version = "0.13.4" }
+schemars = "0.8.1"
+serde = { version = "1.0.103", default-features = false, features = ["derive"] }
+thiserror = { version = "1.0.23" }
+usj-base = { path = "../../packages/usj-base", default-features = false }
+
+[dev-dependencies]
+cw-multi-test = { version = "0.13.4" }
+
+

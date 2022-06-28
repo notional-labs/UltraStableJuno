@@ -1,0 +1,2 @@
+# Coll Surplus Pool contract
+The Coll Surplus Pool holds the JUNO surplus from Troves that have been fully redeemed from as well as from Troves with an ICR > MCR that were liquidated in Recovery Mode. Sends the surplus back to the owning borrower, when told to do so by `borrower-operations`.
