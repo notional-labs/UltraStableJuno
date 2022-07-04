@@ -45,7 +45,7 @@ pub enum ExecuteMsg {
         default_pool_address: String,
         stability_pool_address: String,
         coll_surplus_pool_address: String,
-        price_feed_pool_address: String,
+        price_feed_contract_address: String,
         usj_token_address: String,
         reward_pool_address: String,
     },
