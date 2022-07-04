@@ -14,10 +14,10 @@ use cw20::{BalanceResponse as Cw20BalanceResponse, Cw20QueryMsg, Denom, TokenInf
 const NATIVE_TOKEN_PRECISION: u8 = 6;
 
 // Minimum collateral ratio for individual troves
-pub const MCR: Decimal256 = Decimal256::new(Uint256::from_u128(1100_000_000_000_000_000u128));
+pub const MCR: Decimal256 = Decimal256::new(Uint256::from_u128(1_100_000_000_000_000_000u128));
 
 // Critical system collateral ratio. If the system's total collateral ratio (TCR) falls below the CCR, Recovery Mode is triggered.
-pub const CCR: Decimal256 = Decimal256::new(Uint256::from_u128(1500_000_000_000_000_000u128));
+pub const CCR: Decimal256 = Decimal256::new(Uint256::from_u128(1_500_000_000_000_000_000u128));
 
 // Minimum amount of net USJ debt a trove must have
 pub const MIN_NET_DEBT: Uint128 = Uint128::new(2000u128);
@@ -160,14 +160,27 @@ pub fn query_entire_system_debt(
     Ok(total)
 }
 
-pub fn get_tcr(querier: &QuerierWrapper, price: Decimal256, active_pool_addr: Addr, default_pool_addr: Addr) -> StdResult<Decimal256> {
-    let entire_system_coll = query_entire_system_debt(querier, active_pool_addr.clone(), default_pool_addr.clone()).unwrap();
-    let entire_system_debt = query_entire_system_coll(querier, active_pool_addr, default_pool_addr).unwrap();
+pub fn get_tcr(
+    querier: &QuerierWrapper,
+    price: Decimal256,
+    active_pool_addr: Addr,
+    default_pool_addr: Addr,
+) -> StdResult<Decimal256> {
+    let entire_system_coll =
+        query_entire_system_debt(querier, active_pool_addr.clone(), default_pool_addr.clone())
+            .unwrap();
+    let entire_system_debt =
+        query_entire_system_coll(querier, active_pool_addr, default_pool_addr).unwrap();
     let tcr = usj_math::compute_cr(entire_system_coll, entire_system_debt, price).unwrap();
     Ok(tcr)
 }
 
-pub fn check_recovery_mode(querier: &QuerierWrapper,price: Decimal256, active_pool_addr: Addr, default_pool_addr: Addr) -> bool {
+pub fn check_recovery_mode(
+    querier: &QuerierWrapper,
+    price: Decimal256,
+    active_pool_addr: Addr,
+    default_pool_addr: Addr,
+) -> bool {
     let tcr = get_tcr(querier, price, active_pool_addr, default_pool_addr).unwrap();
-    return tcr < CCR;
+    tcr < CCR
 }
