@@ -64,7 +64,7 @@ pub enum ExecuteMsg {
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     GetParams {},
-    GetCompositeDebt {debt: Uint128},
+    GetCompositeDebt { debt: Uint128 },
     GetEntireSystemColl {},
     GetEntireSystemDebt {},
     GetActivePoolAddress {},

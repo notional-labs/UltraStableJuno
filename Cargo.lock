@@ -60,6 +60,7 @@ dependencies = [
  "schemars",
  "serde",
  "thiserror",
+ "usj-base",
 ]
 
 [[package]]
