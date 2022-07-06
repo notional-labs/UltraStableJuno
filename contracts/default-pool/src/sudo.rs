@@ -1,7 +1,7 @@
 use crate::error::ContractError;
 use crate::state::SUDO_PARAMS;
 use cosmwasm_std::{entry_point, Addr, DepsMut, Env, Response};
-use usj_base::default_pool::SudoMsg;
+use ultra_base::default_pool::SudoMsg;
 
 pub struct ParamInfo {
     name: Option<String>,

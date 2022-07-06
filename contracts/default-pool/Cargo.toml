@@ -4,8 +4,8 @@ version = "0.1.0"
 authors = ["Chinh D.Nguyen <eyescryptoinsights@gmail.com>"]
 edition = "2021"
 
-description = "The Default Pool holds the JUNO and USJ debt (but not USJ tokens) from liquidations that have been redistributed to active troves but not yet applied, i.e. not yet recorded on a recipient active trove's struct."
-repository = "https://github.com/notional-labs/USJ"
+description = "The Default Pool holds the JUNO and ULTRA debt (but not ULTRA tokens) from liquidations that have been redistributed to active troves but not yet applied, i.e. not yet recorded on a recipient active trove's struct."
+repository = "https://github.com/notional-labs/ULTRA"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -22,6 +22,6 @@ cw-storage-plus = { version = "0.13.4" }
 schemars = "0.8.1"
 serde = { version = "1.0.103", default-features = false, features = ["derive"] }
 thiserror = { version = "1.0.23" }
-usj-base = { path = "../../packages/usj-base", default-features = false }
+ultra-base = { path = "../../packages/ultra-base", default-features = false }
 
 

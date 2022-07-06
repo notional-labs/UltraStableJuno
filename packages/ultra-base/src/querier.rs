@@ -1,7 +1,7 @@
 use crate::active_pool::QueryMsg as ActivePoolQueryMsg;
 use crate::asset::{AssetInfo, PoolInfo};
 use crate::default_pool::QueryMsg as DefaultPoolQueryMsg;
-use crate::usj_math;
+use crate::ultra_math;
 
 use cosmwasm_std::{
     Addr, AllBalanceResponse, BankQuery, Coin, Decimal256, QuerierWrapper, QueryRequest, StdError,
@@ -19,7 +19,7 @@ pub const MCR: Decimal256 = Decimal256::new(Uint256::from_u128(1_100_000_000_000
 // Critical system collateral ratio. If the system's total collateral ratio (TCR) falls below the CCR, Recovery Mode is triggered.
 pub const CCR: Decimal256 = Decimal256::new(Uint256::from_u128(1_500_000_000_000_000_000u128));
 
-// Minimum amount of net USJ debt a trove must have
+// Minimum amount of net ULTRA debt a trove must have
 pub const MIN_NET_DEBT: Uint128 = Uint128::new(2000u128);
 
 pub const BORROWING_FEE_FLOOR: Decimal256 =
@@ -150,9 +150,9 @@ pub fn query_entire_system_debt(
     default_pool_addr: Addr,
 ) -> StdResult<Uint128> {
     let active_debt: Uint128 =
-        querier.query_wasm_smart(active_pool_addr, &ActivePoolQueryMsg::GetUSJDebt {})?;
+        querier.query_wasm_smart(active_pool_addr, &ActivePoolQueryMsg::GetULTRADebt {})?;
     let liquidated_debt: Uint128 =
-        querier.query_wasm_smart(default_pool_addr, &DefaultPoolQueryMsg::GetUSJDebt {})?;
+        querier.query_wasm_smart(default_pool_addr, &DefaultPoolQueryMsg::GetULTRADebt {})?;
     let total = active_debt
         .checked_add(liquidated_debt)
         .map_err(StdError::overflow)?;
@@ -171,7 +171,7 @@ pub fn get_tcr(
             .unwrap();
     let entire_system_debt =
         query_entire_system_coll(querier, active_pool_addr, default_pool_addr).unwrap();
-    let tcr = usj_math::compute_cr(entire_system_coll, entire_system_debt, price).unwrap();
+    let tcr = ultra_math::compute_cr(entire_system_coll, entire_system_debt, price).unwrap();
     Ok(tcr)
 }
 

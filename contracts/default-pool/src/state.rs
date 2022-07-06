@@ -12,7 +12,7 @@ pub struct AddressesSet {
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 pub struct AssetsInPool {
     pub juno: Uint128,
-    pub usj_debt: Uint128,
+    pub ultra_debt: Uint128,
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]

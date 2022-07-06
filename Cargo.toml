@@ -1,7 +1,7 @@
 [workspace]
 members = ["contracts/*", "packages/*"]
 
-[profile.release.package.usj-token]
+[profile.release.package.ultra-token]
 codegen-units = 1
 incremental = false
 

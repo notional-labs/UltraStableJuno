@@ -14,7 +14,7 @@ use crate::state::{
     AddressesSet, SudoParams, TotalCollsInPool, ADDRESSES_SET, COLL_OF_ACCOUNT, SUDO_PARAMS,
     TOTAL_COLLS_IN_POOL,
 };
-use usj_base::coll_surplus_pool::{ExecuteMsg, InstantiateMsg, ParamsResponse, QueryMsg};
+use ultra_base::coll_surplus_pool::{ExecuteMsg, InstantiateMsg, ParamsResponse, QueryMsg};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:active-pool";

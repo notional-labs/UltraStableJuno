@@ -13,7 +13,7 @@ use crate::error::ContractError;
 use crate::state::{
     AddressesSet, AssetsInPool, SudoParams, ADDRESSES_SET, ASSETS_IN_POOL, SUDO_PARAMS,
 };
-use usj_base::active_pool::{ExecuteMsg, InstantiateMsg, ParamsResponse, QueryMsg};
+use ultra_base::active_pool::{ExecuteMsg, InstantiateMsg, ParamsResponse, QueryMsg};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:active-pool";
@@ -39,7 +39,7 @@ pub fn instantiate(
     // initial assets in pool
     let assets_in_pool = AssetsInPool {
         juno: Uint128::zero(),
-        usj_debt: Uint128::zero(),
+        ultra_debt: Uint128::zero(),
     };
 
     SUDO_PARAMS.save(deps.storage, &sudo_params)?;
@@ -56,11 +56,11 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::IncreaseUSJDebt { amount } => {
-            execute_increase_usj_debt(deps, env, info, amount)
+        ExecuteMsg::IncreaseULTRADebt { amount } => {
+            execute_increase_ultra_debt(deps, env, info, amount)
         }
-        ExecuteMsg::DecreaseUSJDebt { amount } => {
-            execute_decrease_usj_debt(deps, env, info, amount)
+        ExecuteMsg::DecreaseULTRADebt { amount } => {
+            execute_decrease_ultra_debt(deps, env, info, amount)
         }
         ExecuteMsg::SendJUNO { recipient, amount } => {
             execute_send_juno(deps, env, info, recipient, amount)
@@ -82,7 +82,7 @@ pub fn execute(
     }
 }
 
-pub fn execute_increase_usj_debt(
+pub fn execute_increase_ultra_debt(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
@@ -91,15 +91,15 @@ pub fn execute_increase_usj_debt(
     only_bo_or_tm(deps.storage, &info)?;
 
     let mut assets_in_pool = ASSETS_IN_POOL.load(deps.storage)?;
-    assets_in_pool.usj_debt += amount;
+    assets_in_pool.ultra_debt += amount;
     ASSETS_IN_POOL.save(deps.storage, &assets_in_pool)?;
     let res = Response::new()
-        .add_attribute("action", "increase_usj_debt")
+        .add_attribute("action", "increase_ultra_debt")
         .add_attribute("amount", amount);
     Ok(res)
 }
 
-pub fn execute_decrease_usj_debt(
+pub fn execute_decrease_ultra_debt(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
@@ -108,13 +108,13 @@ pub fn execute_decrease_usj_debt(
     only_bo_or_tm_or_sp(deps.storage, &info)?;
 
     let mut assets_in_pool = ASSETS_IN_POOL.load(deps.storage)?;
-    assets_in_pool.usj_debt = assets_in_pool
-        .usj_debt
+    assets_in_pool.ultra_debt = assets_in_pool
+        .ultra_debt
         .checked_sub(amount)
         .map_err(StdError::overflow)?;
     ASSETS_IN_POOL.save(deps.storage, &assets_in_pool)?;
     let res = Response::new()
-        .add_attribute("action", "decrease_usj_debt")
+        .add_attribute("action", "decrease_ultra_debt")
         .add_attribute("amount", amount);
     Ok(res)
 }
@@ -219,7 +219,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::GetParams {} => to_binary(&query_params(deps)?),
         QueryMsg::GetJUNO {} => to_binary(&query_juno_state(deps)?),
-        QueryMsg::GetUSJDebt {} => to_binary(&query_usj_debt_state(deps)?),
+        QueryMsg::GetULTRADebt {} => to_binary(&query_ultra_debt_state(deps)?),
         QueryMsg::GetBorrowerOperationsAddress {} => {
             to_binary(&query_borrower_operations_address(deps)?)
         }
@@ -235,9 +235,9 @@ pub fn query_juno_state(deps: Deps) -> StdResult<Uint128> {
     Ok(res)
 }
 
-pub fn query_usj_debt_state(deps: Deps) -> StdResult<Uint128> {
+pub fn query_ultra_debt_state(deps: Deps) -> StdResult<Uint128> {
     let info = ASSETS_IN_POOL.load(deps.storage)?;
-    let res = info.usj_debt;
+    let res = info.ultra_debt;
     Ok(res)
 }
 

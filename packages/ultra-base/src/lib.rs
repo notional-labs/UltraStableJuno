@@ -5,4 +5,4 @@ pub mod coll_surplus_pool;
 pub mod default_pool;
 pub mod oracle;
 pub mod querier;
-pub mod usj_math;
+pub mod ultra_math;

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use cosmwasm_std::{Addr, Decimal256, Uint128};
 use cw_storage_plus::Item;
-use usj_base::asset::{AssetInfo, PoolInfo};
+use ultra_base::asset::{AssetInfo, PoolInfo};
 
 /// This structure stores the latest cumulative and average token prices for the target pool
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

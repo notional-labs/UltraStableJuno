@@ -5,7 +5,7 @@ authors = ["Chinh D.Nguyen <eyescryptoinsights@gmail.com>"]
 edition = "2021"
 
 description = "The Coll Surplus Pool holds the JUNO surplus from Troves that have been fully redeemed from as well as from Troves with an ICR > MCR that were liquidated in Recovery Mode."
-repository = "https://github.com/notional-labs/USJ"
+repository = "https://github.com/notional-labs/ULTRA"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -22,7 +22,7 @@ cw-storage-plus = { version = "0.13.4" }
 schemars = "0.8.1"
 serde = { version = "1.0.103", default-features = false, features = ["derive"] }
 thiserror = { version = "1.0.23" }
-usj-base = { path = "../../packages/usj-base", default-features = false }
+ultra-base = { path = "../../packages/ultra-base", default-features = false }
 
 [dev-dependencies]
 cw-multi-test = { version = "0.13.4" }
