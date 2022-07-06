@@ -5,7 +5,7 @@ authors = ["Chinh D.Nguyen <eyescryptoinsights@gmail.com>"]
 edition = "2021"
 
 description = "The Default Pool holds the JUNO and ULTRA debt (but not ULTRA tokens) from liquidations that have been redistributed to active troves but not yet applied, i.e. not yet recorded on a recipient active trove's struct."
-repository = "https://github.com/notional-labs/ULTRA"
+repository = "https://github.com/notional-labs/UltraStableJuno"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

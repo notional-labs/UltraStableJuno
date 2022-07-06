@@ -1,5 +1,5 @@
 [workspace]
-members = ["contracts/*", "packages/*"]
+members = ["contracts/*", "packages/*", "test-contracts/*"]
 
 [profile.release.package.ultra-token]
 codegen-units = 1
