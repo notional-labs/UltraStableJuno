@@ -5,7 +5,7 @@ authors = ["Chinh D.Nguyen <eyescryptoinsights@gmail.com>"]
 edition = "2021"
 
 description = "Implementation ULTRA stablecoin as a CW20 token"
-repository = "https://github.com/notional-labs/ULTRA"
+repository = "https://github.com/notional-labs/UltraStableJuno"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
