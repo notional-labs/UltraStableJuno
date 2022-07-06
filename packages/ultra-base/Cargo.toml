@@ -1,11 +1,11 @@
 [package]
-name = "usj-base"
+name = "ultra-base"
 version = "0.1.0"
 authors = ["Chinh D.Nguyen <eyescryptoinsights@gmail.com>"]
 edition = "2021"
 description = "Commom types, queriers and other utils"
 license = "Apache-2.0"
-repository = "https://github.com/notional-labs/USJ"
+repository = "https://github.com/notional-labs/ULTRA"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

@@ -13,7 +13,7 @@ dependencies = [
  "schemars",
  "serde",
  "thiserror",
- "usj-base",
+ "ultra-base",
 ]
 
 [[package]]
@@ -50,20 +50,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "borrower-operations"
-version = "0.1.0"
-dependencies = [
- "cosmwasm-std",
- "cw-multi-test",
- "cw-storage-plus 0.13.4",
- "cw2 0.13.4",
- "schemars",
- "serde",
- "thiserror",
- "usj-base",
-]
-
-[[package]]
 name = "byteorder"
 version = "1.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -92,7 +78,7 @@ dependencies = [
  "schemars",
  "serde",
  "thiserror",
- "usj-base",
+ "ultra-base",
 ]
 
 [[package]]
@@ -372,7 +358,7 @@ dependencies = [
  "schemars",
  "serde",
  "thiserror",
- "usj-base",
+ "ultra-base",
 ]
 
 [[package]]
@@ -561,7 +547,7 @@ dependencies = [
  "schemars",
  "serde",
  "thiserror",
- "usj-base",
+ "ultra-base",
 ]
 
 [[package]]
@@ -859,13 +845,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "unicode-ident"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5bd2fe26506023ed7b5e1e315add59d6f584c621d037f9368fea9cfb988f368c"
-
-[[package]]
-name = "usj-base"
+name = "ultra-base"
 version = "0.1.0"
 dependencies = [
  "cosmwasm-schema",
@@ -879,7 +859,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "usj-token"
+name = "ultra-token"
 version = "0.1.0"
 dependencies = [
  "cosmwasm-schema",
@@ -892,6 +872,12 @@ dependencies = [
  "serde",
  "thiserror",
 ]
+
+[[package]]
+name = "unicode-ident"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5bd2fe26506023ed7b5e1e315add59d6f584c621d037f9368fea9cfb988f368c"
 
 [[package]]
 name = "version_check"

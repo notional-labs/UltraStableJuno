@@ -3,7 +3,7 @@ use crate::{
     ContractError,
 };
 
-use usj_base::active_pool::{ExecuteMsg, InstantiateMsg, ParamsResponse, QueryMsg, SudoMsg};
+use ultra_base::active_pool::{ExecuteMsg, InstantiateMsg, ParamsResponse, QueryMsg, SudoMsg};
 
 use cosmwasm_std::{Addr, Empty, Uint128};
 use cw_multi_test::{App, Contract, ContractWrapper, Executor};
@@ -135,7 +135,7 @@ fn test_set_addresses() {
 }
 
 #[test]
-fn test_increase_decrease_usj_debt() {
+fn test_increase_decrease_ultra_debt() {
     let mut app = App::default();
     let msg = InstantiateMsg {
         name: String::from("Active Pool"),
@@ -159,11 +159,11 @@ fn test_increase_decrease_usj_debt() {
     )
     .unwrap();
 
-    let increase_usj_debt_msg = ExecuteMsg::IncreaseUSJDebt {
+    let increase_ultra_debt_msg = ExecuteMsg::IncreaseULTRADebt {
         amount: Uint128::new(100u128),
     };
 
-    let decrease_usj_debt_msg = ExecuteMsg::DecreaseUSJDebt {
+    let decrease_ultra_debt_msg = ExecuteMsg::DecreaseULTRADebt {
         amount: Uint128::new(50u128),
     };
 
@@ -171,7 +171,7 @@ fn test_increase_decrease_usj_debt() {
         .execute_contract(
             Addr::unchecked(SOME),
             active_pool_addr.clone(),
-            &increase_usj_debt_msg,
+            &increase_ultra_debt_msg,
             &[],
         )
         .unwrap_err()
@@ -182,30 +182,30 @@ fn test_increase_decrease_usj_debt() {
     app.execute_contract(
         Addr::unchecked(TM),
         active_pool_addr.clone(),
-        &increase_usj_debt_msg,
+        &increase_ultra_debt_msg,
         &[],
     )
     .unwrap();
 
-    let usj_debt: Uint128 = app
+    let ultra_debt: Uint128 = app
         .wrap()
-        .query_wasm_smart(active_pool_addr.clone(), &QueryMsg::GetUSJDebt {})
+        .query_wasm_smart(active_pool_addr.clone(), &QueryMsg::GetULTRADebt {})
         .unwrap();
 
-    assert_eq!(usj_debt, Uint128::new(100u128));
+    assert_eq!(ultra_debt, Uint128::new(100u128));
 
     app.execute_contract(
         Addr::unchecked(TM),
         active_pool_addr.clone(),
-        &decrease_usj_debt_msg,
+        &decrease_ultra_debt_msg,
         &[],
     )
     .unwrap();
 
-    let usj_debt: Uint128 = app
+    let ultra_debt: Uint128 = app
         .wrap()
-        .query_wasm_smart(active_pool_addr.clone(), &QueryMsg::GetUSJDebt {})
+        .query_wasm_smart(active_pool_addr.clone(), &QueryMsg::GetULTRADebt {})
         .unwrap();
 
-    assert_eq!(usj_debt, Uint128::new(50u128));
+    assert_eq!(ultra_debt, Uint128::new(50u128));
 }

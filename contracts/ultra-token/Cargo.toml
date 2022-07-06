@@ -1,11 +1,11 @@
 [package]
-name = "usj-token"
+name = "ultra-token"
 version = "0.1.0"
 authors = ["Chinh D.Nguyen <eyescryptoinsights@gmail.com>"]
 edition = "2021"
 
-description = "Implementation USJ stablecoin as a CW20 token"
-repository = "https://github.com/notional-labs/USJ"
+description = "Implementation ULTRA stablecoin as a CW20 token"
+repository = "https://github.com/notional-labs/ULTRA"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

@@ -5,9 +5,9 @@ use cosmwasm_std::{
     StdError, StdResult, Uint128, Uint256,
 };
 use cw2::set_contract_version;
-use usj_base::asset::{AssetInfo, PoolInfo};
-use usj_base::oracle::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
-use usj_base::querier::query_pool_info;
+use ultra_base::asset::{AssetInfo, PoolInfo};
+use ultra_base::oracle::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
+use ultra_base::querier::query_pool_info;
 
 const CONTRACT_NAME: &str = "junoswap-oracle";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
