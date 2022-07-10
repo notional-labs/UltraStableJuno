@@ -23,6 +23,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08f9b8508dccb7687a1d6c4ce66b2b0ecef467c94667de27d8d7fe1f8d2a9cdc"
 
 [[package]]
+name = "bandoracle"
+version = "0.1.0"
+dependencies = [
+ "cosmwasm-schema 0.16.7",
+ "cosmwasm-std",
+ "cw-storage-plus 0.13.4",
+ "cw-utils",
+ "cw0",
+ "cw2 0.13.4",
+ "cw20 0.13.4",
+ "hex",
+ "schemars",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
 name = "base16ct"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -107,6 +124,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4b36e527620a2a3e00e46b6e731ab6c9b68d11069c986f7d7be8eba79ef081a4"
 dependencies = [
  "syn",
+]
+
+[[package]]
+name = "cosmwasm-schema"
+version = "0.16.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b021bdefb9d855c5135e83046e5407a9fddba869e42e78b6036b53a606dc8c10"
+dependencies = [
+ "schemars",
+ "serde_json",
 ]
 
 [[package]]
@@ -590,7 +617,7 @@ dependencies = [
 name = "price-feed-test"
 version = "0.1.0"
 dependencies = [
- "cosmwasm-schema",
+ "cosmwasm-schema 1.0.0",
  "cosmwasm-std",
  "cw-storage-plus 0.13.4",
  "cw2 0.13.4",
@@ -861,7 +888,7 @@ dependencies = [
 name = "ultra-base"
 version = "0.1.0"
 dependencies = [
- "cosmwasm-schema",
+ "cosmwasm-schema 1.0.0",
  "cosmwasm-std",
  "cw-storage-plus 0.13.4",
  "cw20 0.10.3",
@@ -875,7 +902,7 @@ dependencies = [
 name = "ultra-token"
 version = "0.1.0"
 dependencies = [
- "cosmwasm-schema",
+ "cosmwasm-schema 1.0.0",
  "cosmwasm-std",
  "cw-storage-plus 0.13.4",
  "cw-utils",
