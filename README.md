@@ -11,4 +11,4 @@
 
 
 ## 💡 Overview
-<i>*ULTRA* is a CosmWasm stablecoin protocol developed on JunoNetwork by an independent collective of Cosmos contributors. Inspired by [Liquity](https://www.liquity.org/), ULTRA features mach-10 liquidations, instant redemptions, and fully autonomous stability.</i>
+Ultra is a CosmWasm stablecoin protocol developed on JunoNetwork by an independent collective of Cosmos contributors. Inspired by [Liquity](https://www.liquity.org/), Ultra features mach-10 liquidations, instant redemptions, and fully autonomous stability.
