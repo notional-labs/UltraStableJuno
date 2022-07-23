@@ -1,0 +1,29 @@
+[package]
+name = "bandoracle"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+backtraces = ["cosmwasm-std/backtraces"]
+# use library feature to disable all init/handle/query exports
+library = []
+
+[dependencies]
+cw-utils = "0.13.4"
+cw2 = "0.13.4"
+cw0 = "0.10.3"
+cw20 = "0.13.4"
+
+cosmwasm-std = { version = "1.0.0", features = ["stargate"] }
+hex = "0.4.3"
+cw-storage-plus = "0.13.4"
+schemars = "0.8.1"
+serde = { version = "1.0.103", default-features = false, features = ["derive"] }
+thiserror = { version = "1.0.23" }
+[dev-dependencies]
+cosmwasm-schema = { version = "0.16.3" }
