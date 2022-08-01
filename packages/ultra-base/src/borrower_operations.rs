@@ -12,7 +12,10 @@ pub struct InstantiateMsg {
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
     /// Send JUNO as collateral to a trove
-    AddColl {},
+    AddColl {
+        upper_hint: String,
+        lower_hint: String,
+    },
     /// Alongside a debt change, this function can perform either a collateral top-up or a collateral withdrawal.
     AdjustTrove {
         borrower: Addr,
@@ -20,6 +23,8 @@ pub enum ExecuteMsg {
         ultra_change: Uint128,
         is_debt_increase: bool,
         max_fee_percentage: Decimal256,
+        upper_hint: String,
+        lower_hint: String,
     },
     /// Claim remaining collateral from a redemption or from a liquidation with ICR > MCR in Recovery Mode
     ClaimCollateral {},
@@ -27,10 +32,14 @@ pub enum ExecuteMsg {
     /// Send JUNO as collateral to a trove. Called by only the Stability Pool.
     MoveJUNOGainToTrove {
         borrower: Addr,
+        upper_hint: String,
+        lower_hint: String,
     },
     OpenTrove {
         max_fee_percentage: Decimal256,
         ultra_amount: Uint128,
+        upper_hint: String,
+        lower_hint: String,
     },
     /// Burn the specified amount of ULTRA from `account` and decreases the total active debt
     RepayULTRA {
@@ -38,6 +47,8 @@ pub enum ExecuteMsg {
         ultra_token_addr: Addr,
         account: Addr,
         ultra_amount: Uint128,
+        upper_hint: String,
+        lower_hint: String,
     },
     SetAddresses {
         trove_manager_address: String,
@@ -46,17 +57,22 @@ pub enum ExecuteMsg {
         stability_pool_address: String,
         coll_surplus_pool_address: String,
         price_feed_contract_address: String,
+        sorted_troves_address: String,
         ultra_token_address: String,
         reward_pool_address: String,
     },
     /// Withdraw JUNO collateral from a trove
     WithdrawColl {
         coll_amount: Uint128,
+        upper_hint: String,
+        lower_hint: String,
     },
     /// Withdraw ULTRA tokens from a trove: mint new ULTRA tokens to the owner, and increase the trove's debt accordingly
     WithdrawULTRA {
         max_fee_percentage: Uint128,
         ultra_amount: Uint128,
+        upper_hint: String,
+        lower_hint: String,
     },
 }
 
@@ -69,9 +85,12 @@ pub enum QueryMsg {
     GetEntireSystemDebt {},
     GetActivePoolAddress {},
     GetDefaultPoolAddress {},
+    GetCollSurplusPoolAddress {},
     GetTroveManagerAddress {},
     GetULTRATokenContractAddress {},
+    GetStabilityPoolAddress {},
     GetPriceFeedContractAddress {},
+    GetSortedTrovesAddress {},
     GetRewardPoolAddress {},
 }
 

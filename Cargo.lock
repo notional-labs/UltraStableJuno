@@ -67,6 +67,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "borrower-operation"
+version = "0.1.0"
+dependencies = [
+ "cosmwasm-std",
+ "cw-multi-test",
+ "cw-storage-plus 0.13.4",
+ "cw2 0.13.4",
+ "schemars",
+ "serde",
+ "thiserror",
+ "ultra-base",
+]
+
+[[package]]
 name = "byteorder"
 version = "1.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
