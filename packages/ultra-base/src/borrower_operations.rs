@@ -13,8 +13,8 @@ pub struct InstantiateMsg {
 pub enum ExecuteMsg {
     /// Send JUNO as collateral to a trove
     AddColl {
-        upper_hint: String,
-        lower_hint: String,
+        upper_hint: Addr,
+        lower_hint: Addr,
     },
     /// Alongside a debt change, this function can perform either a collateral top-up or a collateral withdrawal.
     AdjustTrove {
@@ -23,8 +23,8 @@ pub enum ExecuteMsg {
         ultra_change: Uint128,
         is_debt_increase: bool,
         max_fee_percentage: Decimal256,
-        upper_hint: String,
-        lower_hint: String,
+        upper_hint: Addr,
+        lower_hint: Addr,
     },
     /// Claim remaining collateral from a redemption or from a liquidation with ICR > MCR in Recovery Mode
     ClaimCollateral {},
@@ -32,14 +32,14 @@ pub enum ExecuteMsg {
     /// Send JUNO as collateral to a trove. Called by only the Stability Pool.
     MoveJUNOGainToTrove {
         borrower: Addr,
-        upper_hint: String,
-        lower_hint: String,
+        upper_hint: Addr,
+        lower_hint: Addr,
     },
     OpenTrove {
         max_fee_percentage: Decimal256,
         ultra_amount: Uint128,
-        upper_hint: String,
-        lower_hint: String,
+        upper_hint: Addr,
+        lower_hint: Addr,
     },
     /// Burn the specified amount of ULTRA from `account` and decreases the total active debt
     RepayULTRA {
@@ -47,8 +47,8 @@ pub enum ExecuteMsg {
         ultra_token_addr: Addr,
         account: Addr,
         ultra_amount: Uint128,
-        upper_hint: String,
-        lower_hint: String,
+        upper_hint: Addr,
+        lower_hint: Addr,
     },
     SetAddresses {
         trove_manager_address: String,
@@ -64,15 +64,15 @@ pub enum ExecuteMsg {
     /// Withdraw JUNO collateral from a trove
     WithdrawColl {
         coll_amount: Uint128,
-        upper_hint: String,
-        lower_hint: String,
+        upper_hint: Addr,
+        lower_hint: Addr,
     },
     /// Withdraw ULTRA tokens from a trove: mint new ULTRA tokens to the owner, and increase the trove's debt accordingly
     WithdrawULTRA {
         max_fee_percentage: Uint128,
         ultra_amount: Uint128,
-        upper_hint: String,
-        lower_hint: String,
+        upper_hint: Addr,
+        lower_hint: Addr,
     },
 }
 
@@ -80,9 +80,14 @@ pub enum ExecuteMsg {
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     GetParams {},
-    GetCompositeDebt { debt: Uint128 },
-    GetEntireSystemColl {},
-    GetEntireSystemDebt {},
+    GetEntireSystemColl {
+        active_pool_addr: Addr,
+        default_pool_addr: Addr,
+    },
+    GetEntireSystemDebt {
+        active_pool_addr: Addr,
+        default_pool_addr: Addr,
+    },
     GetActivePoolAddress {},
     GetDefaultPoolAddress {},
     GetCollSurplusPoolAddress {},
