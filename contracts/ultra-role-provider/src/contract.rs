@@ -1,7 +1,10 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Empty, to_binary};
-use ultra_base::role_provider::HasAnyRoleResponse;
+use cosmwasm_std::{
+    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
+};
+use ultra_base::role_provider::{HasAnyRoleResponse, RoleAddressResponse};
+use ultra_controllers::roles::Role;
 // use cw2::set_contract_version;
 
 use crate::error::ContractError;
@@ -32,11 +35,10 @@ pub fn execute(
     info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
-    let state = State::default();
     match msg {
         ExecuteMsg::UpdateRole { role, address } => {
-            state.role_provider.execute_update_role::<Empty, Empty>(deps, info, role, Some(address)).map_err(ContractError::UnauthorizedForRole)
-        },
+            execute_update_role(deps, info, role, Some(address))
+        }
     }
 }
 
@@ -45,14 +47,122 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     let state = State::default();
     match msg {
         QueryMsg::HasAnyRole { address, roles } => {
-            let has_role = state.role_provider.has_any_role(deps.storage, &roles, &address)?;
-            to_binary(&HasAnyRoleResponse {
-                has_role
-            })
-        },
-        QueryMsg::RoleAddress { role } => to_binary(&state.role_provider.query_role(deps, role)?),
+            let has_role = state
+                .role_provider
+                .has_any_role(deps.storage, &roles, &address)?;
+            to_binary(&HasAnyRoleResponse { has_role })
+        }
+        QueryMsg::RoleAddress { role } => to_binary(&query_role_address(deps, role)?),
     }
 }
 
+pub fn execute_update_role(
+    deps: DepsMut,
+    info: MessageInfo,
+    role: Role,
+    address: Option<String>,
+) -> Result<Response, ContractError> {
+    let state = State::default();
+
+    // Only owner can update roles.
+    state
+        .role_provider
+        .assert_role(deps.storage, &Role::Owner, &info.sender)?;
+
+    match &address {
+        Some(address) => {
+            let address = deps.api.addr_validate(&address)?;
+            state.role_provider.set(deps.storage, &role, address)
+        }
+        None => {
+            // owner role cannot be deleted
+            if role != Role::Owner {
+                state.role_provider.delete(deps.storage, &role)
+            } else {
+                Err(StdError::generic_err("owner cannot be deleted!"))
+            }
+        }
+    }?;
+
+    let grantee_attr = address.unwrap_or("None".to_string());
+
+    Ok(Response::new().add_attributes(vec![
+        ("action", "update_role"),
+        ("role", &role.to_string()),
+        ("grantee", &grantee_attr),
+        ("sender", info.sender.as_str()),
+    ]))
+}
+
+pub fn query_role_address(deps: Deps, role: Role) -> StdResult<RoleAddressResponse> {
+    let state = State::default();
+    let addr = state
+        .role_provider
+        .get(deps.storage, &role)?
+        .map(String::from);
+    Ok(RoleAddressResponse { address: addr })
+}
+
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use cosmwasm_std::{
+        testing::{mock_dependencies, mock_info},
+        Addr, Empty,
+    };
+    use ultra_controllers::roles::{Role, RoleProvider, RolesError};
+
+    use crate::{
+        contract::{execute, execute_update_role, query, query_role_address},
+        ContractError,
+    };
+
+    #[test]
+    fn test_execute_query() {
+        let mut deps = mock_dependencies();
+
+        // initial setup
+        let control = RoleProvider::new("foo", "foo__idx");
+        let owner = Addr::unchecked("big boss");
+        let imposter = Addr::unchecked("imposter");
+        let friend = Addr::unchecked("buddy");
+        control
+            .set(deps.as_mut().storage, &Role::Owner, owner.clone())
+            .unwrap();
+
+        // query shows results
+        let res = query_role_address(deps.as_ref(), Role::Owner).unwrap();
+        assert_eq!(Some(owner.to_string()), res.address);
+
+        // imposter cannot update
+        let info = mock_info(imposter.as_ref(), &[]);
+        let new_admin = Some(friend.clone());
+        let err = execute_update_role(
+            deps.as_mut(),
+            info,
+            Role::Owner,
+            new_admin.clone().map(|a| a.to_string()),
+        )
+        .unwrap_err();
+        assert_eq!(
+            ContractError::UnauthorizedForRole(RolesError::UnauthorizedForRole {
+                label: Role::Owner.to_string()
+            }),
+            err
+        );
+
+        // owner can update
+        let info = mock_info(owner.as_ref(), &[]);
+        let res = execute_update_role(
+            deps.as_mut(),
+            info,
+            Role::Owner,
+            new_admin.map(|a| a.to_string()),
+        )
+        .unwrap();
+        assert_eq!(0, res.messages.len());
+
+        // query shows results
+        let res = query_role_address(deps.as_ref(), Role::Owner).unwrap();
+        assert_eq!(Some(friend.to_string()), res.address);
+    }
+}
