@@ -7,7 +7,7 @@ use thiserror::Error;
 use cosmwasm_std::{
     attr, Addr, CustomQuery, Deps, DepsMut, MessageInfo, Response, StdError, StdResult, Storage,
 };
-use cw_storage_plus::{IndexedMap, index_list, MultiIndex};
+use cw_storage_plus::{IndexedMap, index_list, MultiIndex, Item};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -30,16 +30,16 @@ impl ToString for Role {
 }
 
 // TODO: should the return values end up in utils, so eg. cw4 can import them as well as this module?
-/// Returned from Permissions.query_role()
+/// Returned from Roles.query_role()
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
-pub struct PermissionsResponse {
+pub struct RolesResponse {
     pub address: Option<String>,
     pub role: Role
 }
 
 /// Errors returned from Admin
 #[derive(Error, Debug, PartialEq)]
-pub enum PermissionsError {
+pub enum RolesError {
     #[error("{0}")]
     Std(#[from] StdError),
 
@@ -47,26 +47,28 @@ pub enum PermissionsError {
     UnauthorizedForRole { label: String },
 }
 
-pub type PermissionRecord = Addr;
+pub type RoleRecord = Addr;
 
 /// stringified role
-pub type PermissionPK<'a> = &'a str;
+pub type RolePK<'a> = &'a str;
 
-#[index_list(PermissionRecord)]
-pub struct PermissionsIndexes<'a> {
+#[index_list(RoleRecord)]
+pub struct RolesIndexes<'a> {
     // find all roles for one address
     // allow for edge case where one address has multiple roles. 
     // e.g. `owner` is also `generator`
-    roles_by_addr: MultiIndex<'a, Addr, PermissionRecord, PermissionPK<'a>>
+    roles_by_addr: MultiIndex<'a, Addr, RoleRecord, RolePK<'a>>
 }
 
+pub struct RoleConsumer<'a>(Item<'a, Addr>);
+
 // state/logic
-pub struct Permissions<'a>(IndexedMap<'a, PermissionPK<'a>, PermissionRecord, PermissionsIndexes<'a>>);
+pub struct RoleProvider<'a>(IndexedMap<'a, RolePK<'a>, RoleRecord, RolesIndexes<'a>>);
 
 // this is the core business logic we expose
-impl<'a> Permissions<'a> {
+impl<'a> RoleProvider<'a> {
     pub fn new(namespace: &'a str, roles_by_addr_idx_namespace: &'a str) -> Self {
-        Permissions(IndexedMap::new(namespace, PermissionsIndexes::<'a> {
+        RoleProvider(IndexedMap::new(namespace, RolesIndexes::<'a> {
             roles_by_addr: MultiIndex::new(|addr| addr.clone(), namespace, roles_by_addr_idx_namespace)
         }))
     }
@@ -79,7 +81,7 @@ impl<'a> Permissions<'a> {
         self.0.save(store, &role.to_string(),  &grantee)
     }
 
-    pub fn get(&self, store: &dyn Storage, role: &Role) -> StdResult<Option<PermissionRecord>> {
+    pub fn get(&self, store: &dyn Storage, role: &Role) -> StdResult<Option<RoleRecord>> {
         self.0.may_load(store, &role.to_string())
     }
 
@@ -104,9 +106,9 @@ impl<'a> Permissions<'a> {
         Ok(false)
     }
 
-    /// Like has_any_role but returns PermissionsError::UnauthorizedForRole if not authorized.
+    /// Like has_any_role but returns RolesError::UnauthorizedForRole if not authorized.
     /// Helper for a nice one-line auth check.
-    pub fn assert_any_role(&self, store: &dyn Storage, roles: &[Role], caller: &Addr) -> Result<(), PermissionsError> {
+    pub fn assert_any_role(&self, store: &dyn Storage, roles: &[Role], caller: &Addr) -> Result<(), RolesError> {
         for role in roles {
             if !self.has_role(store, &role, caller)? {
                 continue
@@ -115,56 +117,67 @@ impl<'a> Permissions<'a> {
             }
         }
         let label = roles.into_iter().map(|r| r.to_string()).collect::<Vec<String>>().join(" | ");
-        Err(PermissionsError::UnauthorizedForRole { label })
+        Err(RolesError::UnauthorizedForRole { label })
     }
 
-    /// Like has_role but returns PermissionsError::UnauthorizedForRole if not authorized.
+    /// Like has_role but returns RolesError::UnauthorizedForRole if not authorized.
     /// Helper for a nice one-line auth check.
     pub fn assert_role(
         &self,
         store: &dyn Storage,
         role: &Role,
         caller: &Addr,
-    ) -> Result<(), PermissionsError> {
+    ) -> Result<(), RolesError> {
         if !self.has_role(store, &role, caller)? {
-            Err(PermissionsError::UnauthorizedForRole { label: role.to_string() })
+            Err(RolesError::UnauthorizedForRole { label: role.to_string() })
         } else {
             Ok(())
         }
     }
 
-    pub fn execute_update_owner<C, Q: CustomQuery>(
+    pub fn execute_update_role<C, Q: CustomQuery>(
         &self,
         deps: DepsMut<Q>,
         info: MessageInfo,
-        new_owner: Option<Addr>,
-    ) -> Result<Response<C>, PermissionsError>
+        role: Role,
+        address: Option<String>,
+    ) -> Result<Response<C>, RolesError>
     where
         C: Clone + fmt::Debug + PartialEq + JsonSchema,
     {
         self.assert_role(deps.storage, &Role::Owner, &info.sender)?;
 
-        let owner_str = match new_owner.as_ref() {
+        let owner_str = match address.as_ref() {
             Some(owner ) => owner.to_string(),
             None => "None".to_string(),
         };
         let attributes = vec![
-            attr("action", "update_owner"),
+            attr("action", "update_role"),
+            attr("role", role.to_string()),
             attr("owner", owner_str),
             attr("sender", info.sender),
         ];
 
-        match new_owner {
-            Some(owner) => self.set(deps.storage, &Role::Owner, owner),
-            None => self.delete(deps.storage, &Role::Owner)
+        match address {
+            Some(address) => {
+                let address = deps.api.addr_validate(&address)?;
+                self.set(deps.storage, &role, address)
+            },
+            None => {
+                if role != Role::Owner {
+                    self.delete(deps.storage, &role)
+                } else {
+                    Err(StdError::generic_err("owner cannot be deleted!"))
+                }
+            }
         }?;
  
         Ok(Response::new().add_attributes(attributes))
     }
 
-    pub fn query_role<Q: CustomQuery>(&self, deps: Deps<Q>, role: Role) -> StdResult<PermissionsResponse> {
+    pub fn query_role<Q: CustomQuery>(&self, deps: Deps<Q>, role: Role) -> StdResult<RolesResponse> {
         let addr = self.get(deps.storage, &role)?.map(String::from);
-        Ok(PermissionsResponse { address: addr, role })
+        Ok(RolesResponse { address: addr, role })
     }
 }
 
@@ -178,7 +191,7 @@ mod tests {
     #[test]
     fn set_and_get_owner() {
         let mut deps = mock_dependencies();
-        let control = Permissions::new("foo", "foo__roles_by_addr");
+        let control = RoleProvider::new("foo", "foo__roles_by_addr");
 
         // initialize and check
         let owner = Addr::unchecked("owner");
@@ -196,7 +209,7 @@ mod tests {
     fn role_checks() {
         let mut deps = mock_dependencies();
 
-        let control = Permissions::new("foo", "foo__idx");
+        let control = RoleProvider::new("foo", "foo__idx");
         let owner = Addr::unchecked("big boss");
         let imposter = Addr::unchecked("imposter");
 
@@ -206,23 +219,23 @@ mod tests {
         assert!(!(control.has_role(deps.as_ref().storage, &Role::Owner, &imposter).unwrap()));
         control.assert_role(deps.as_ref().storage, &Role::Owner, &owner).unwrap();
         let err = control.assert_role(deps.as_ref().storage, &Role::Owner, &imposter).unwrap_err();
-        assert_eq!(PermissionsError::UnauthorizedForRole { label: Role::Owner.to_string() }, err);
+        assert_eq!(RolesError::UnauthorizedForRole { label: Role::Owner.to_string() }, err);
 
         // same checks for `any` variants
         assert!(control.has_any_role(deps.as_ref().storage, &[Role::ActivePool, Role::Owner, Role::StabilityPool], &owner).unwrap());
         assert!(!(control.has_any_role(deps.as_ref().storage, &[Role::ActivePool, Role::Owner, Role::StabilityPool], &imposter).unwrap()));
         control.assert_any_role(deps.as_ref().storage, &[Role::ActivePool, Role::Owner, Role::StabilityPool], &owner).unwrap();
         let err = control.assert_any_role(deps.as_ref().storage, &[Role::Owner, Role::ActivePool, Role::StabilityPool], &imposter).unwrap_err();
-        assert_eq!(PermissionsError::UnauthorizedForRole { label: format!("{} | {} | {}", Role::Owner.to_string(), Role::ActivePool.to_string(), Role::StabilityPool.to_string()) }, err);
+        assert_eq!(RolesError::UnauthorizedForRole { label: format!("{} | {} | {}", Role::Owner.to_string(), Role::ActivePool.to_string(), Role::StabilityPool.to_string()) }, err);
 
         // ensure checks proper with owner None
         control.delete(deps.as_mut().storage, &Role::Owner).unwrap();
         assert!(!(control.has_role(deps.as_ref().storage, &Role::Owner, &owner).unwrap()));
         assert!(!(control.has_role(deps.as_ref().storage, &Role::Owner, &imposter).unwrap()));
         let err = control.assert_role(deps.as_ref().storage, &Role::Owner, &owner).unwrap_err();
-        assert_eq!(PermissionsError::UnauthorizedForRole { label: Role::Owner.to_string() }, err);
+        assert_eq!(RolesError::UnauthorizedForRole { label: Role::Owner.to_string() }, err);
         let err = control.assert_role(deps.as_ref().storage, &Role::Owner, &imposter).unwrap_err();
-        assert_eq!(PermissionsError::UnauthorizedForRole { label: Role::Owner.to_string() }, err);
+        assert_eq!(RolesError::UnauthorizedForRole { label: Role::Owner.to_string() }, err);
     }
 
     #[test]
@@ -230,7 +243,7 @@ mod tests {
         let mut deps = mock_dependencies();
 
         // initial setup
-        let control = Permissions::new("foo", "foo__idx");
+        let control = RoleProvider::new("foo", "foo__idx");
         let owner = Addr::unchecked("big boss");
         let imposter = Addr::unchecked("imposter");
         let friend = Addr::unchecked("buddy");
@@ -244,14 +257,14 @@ mod tests {
         let info = mock_info(imposter.as_ref(), &[]);
         let new_admin = Some(friend.clone());
         let err = control
-            .execute_update_owner::<Empty, Empty>(deps.as_mut(), info, new_admin.clone())
+            .execute_update_role::<Empty, Empty>(deps.as_mut(), info, Role::Owner, new_admin.map(|a| a.to_string()))
             .unwrap_err();
-        assert_eq!(PermissionsError::UnauthorizedForRole { label: Role::Owner.to_string() }, err);
+        assert_eq!(RolesError::UnauthorizedForRole { label: Role::Owner.to_string() }, err);
 
         // owner can update
         let info = mock_info(owner.as_ref(), &[]);
         let res = control
-            .execute_update_owner::<Empty, Empty>(deps.as_mut(), info, new_admin)
+            .execute_update_role::<Empty, Empty>(deps.as_mut(), info, Role::Owner, new_admin.map(|a| a.as_str()))
             .unwrap();
         assert_eq!(0, res.messages.len());
 
