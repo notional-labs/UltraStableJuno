@@ -14,6 +14,7 @@ dependencies = [
  "serde",
  "thiserror",
  "ultra-base",
+ "ultra-controllers",
 ]
 
 [[package]]
@@ -110,6 +111,7 @@ dependencies = [
  "serde",
  "thiserror",
  "ultra-base",
+ "ultra-controllers",
 ]
 
 [[package]]
@@ -459,6 +461,7 @@ dependencies = [
  "serde",
  "thiserror",
  "ultra-base",
+ "ultra-controllers",
 ]
 
 [[package]]
@@ -974,7 +977,6 @@ dependencies = [
  "schemars",
  "serde",
  "uint",
- "ultra-controllers",
  "wasmswap",
 ]
 
@@ -990,6 +992,7 @@ dependencies = [
  "serde",
  "thiserror",
  "uint",
+ "ultra-base",
 ]
 
 [[package]]

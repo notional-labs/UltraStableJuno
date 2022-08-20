@@ -1,34 +1,14 @@
 // based on https://github.com/CosmWasm/cw-plus/blob/main/packages/controllers/src/admin.rs
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::fmt;
+use std::{fmt, marker::PhantomData};
 use thiserror::Error;
+use ultra_base::role_provider::Role;
 
 use cosmwasm_std::{
     attr, Addr, CustomQuery, Deps, DepsMut, MessageInfo, Response, StdError, StdResult, Storage,
 };
 use cw_storage_plus::{index_list, IndexedMap, Item, MultiIndex};
-
-#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
-#[serde(rename_all = "snake_case")]
-pub enum Role {
-    ActivePool,
-    TroveManager,
-    Owner,
-    StabilityPool,
-}
-
-impl ToString for Role {
-    fn to_string(&self) -> String {
-        match &self {
-            Role::ActivePool => "active_pool",
-            Role::TroveManager => "trove_manager",
-            Role::Owner => "owner",
-            Role::StabilityPool => "stability_pool",
-        }
-        .into()
-    }
-}
 
 /// Errors returned from Admin
 #[derive(Error, Debug, PartialEq)]
@@ -53,24 +33,65 @@ pub struct RolesIndexes<'a> {
     roles_by_addr: MultiIndex<'a, Addr, RoleRecord, RolePK<'a>>,
 }
 
-pub struct RoleConsumer<'a>(Item<'a, Addr>);
+type BaseRole = Role;
+pub struct RoleConsumer<'a, Role: ToString = BaseRole>(Item<'a, Addr>, PhantomData<Role>);
+
+impl<'a, Role: ToString + Serialize> RoleConsumer<'a, Role> {
+    pub fn new(role_provider_addr_namespace: &'a str) -> Self {
+        RoleConsumer(Item::new(role_provider_addr_namespace), PhantomData)
+    }
+
+    pub fn assert_role(
+        &self,
+        deps: Deps,
+        address: &Addr,
+        allowed_roles: Vec<Role>,
+    ) -> Result<(), RolesError> {
+        let role_provider_addr = self.0.load(deps.storage)?;
+        let roles_labels = allowed_roles
+            .iter()
+            .map(|r| r.to_string())
+            .collect::<Vec<_>>();
+        let res: ultra_base::role_provider::HasAnyRoleResponse = deps.querier.query_wasm_smart(
+            role_provider_addr,
+            &ultra_base::role_provider::QueryMsg::<Role>::HasAnyRole {
+                address: address.to_string(),
+                roles: allowed_roles,
+            },
+        )?;
+        if res.has_role {
+            Ok(())
+        } else {
+            Err(RolesError::UnauthorizedForRole {
+                // save string manipulation compute by delaying join to here
+                label: roles_labels.join(","),
+            })
+        }
+    }
+}
 
 // state/logic
-pub struct RoleProvider<'a>(IndexedMap<'a, RolePK<'a>, RoleRecord, RolesIndexes<'a>>);
+pub struct RoleProvider<'a, Role: ToString>(
+    IndexedMap<'a, RolePK<'a>, RoleRecord, RolesIndexes<'a>>,
+    PhantomData<Role>,
+);
 
 // this is the core business logic we expose
-impl<'a> RoleProvider<'a> {
+impl<'a, Role: ToString> RoleProvider<'a, Role> {
     pub fn new(namespace: &'a str, roles_by_addr_idx_namespace: &'a str) -> Self {
-        RoleProvider(IndexedMap::new(
-            namespace,
-            RolesIndexes::<'a> {
-                roles_by_addr: MultiIndex::new(
-                    |addr| addr.clone(),
-                    namespace,
-                    roles_by_addr_idx_namespace,
-                ),
-            },
-        ))
+        RoleProvider(
+            IndexedMap::new(
+                namespace,
+                RolesIndexes::<'a> {
+                    roles_by_addr: MultiIndex::new(
+                        |addr| addr.clone(),
+                        namespace,
+                        roles_by_addr_idx_namespace,
+                    ),
+                },
+            ),
+            PhantomData,
+        )
     }
 
     pub fn delete(&self, store: &mut dyn Storage, role: &Role) -> StdResult<()> {
@@ -161,10 +182,26 @@ mod tests {
     use cosmwasm_std::testing::{mock_dependencies, mock_info};
     use cosmwasm_std::Empty;
 
+    enum Role {
+        Owner,
+        ActivePool,
+        StabilityPool,
+    }
+
+    impl ToString for Role {
+        fn to_string(&self) -> String {
+            match self {
+                Role::Owner => "owner".to_string(),
+                Role::ActivePool => "active_pool".to_string(),
+                Role::StabilityPool => "stability_pool".to_string(),
+            }
+        }
+    }
+
     #[test]
     fn set_and_get_owner() {
         let mut deps = mock_dependencies();
-        let control = RoleProvider::new("foo", "foo__roles_by_addr");
+        let control = RoleProvider::<Role>::new("foo", "foo__roles_by_addr");
 
         // initialize and check
         let owner = Addr::unchecked("owner");

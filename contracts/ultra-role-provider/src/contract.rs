@@ -1,11 +1,10 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
+    to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
 };
-use ultra_base::role_provider::{HasAnyRoleResponse, RoleAddressResponse};
-use ultra_controllers::roles::Role;
-// use cw2::set_contract_version;
+use cw2::set_contract_version;
+use ultra_base::role_provider::{HasAnyRoleResponse, Role, RoleAddressResponse};
 
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
@@ -21,11 +20,18 @@ pub fn instantiate(
     _info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
+    set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
     let state = State::default();
-    for (role, grantee) in msg.roles {
-        state.role_provider.set(deps.storage, &role, grantee)?;
+    for (role, address) in vec![
+        (Role::Owner, msg.owner),
+        (Role::StabilityPool, msg.stability_pool),
+        (Role::TroveManager, msg.trove_manager),
+        (Role::ActivePool, msg.active_pool),
+    ] {
+        let address = deps.api.addr_validate(&address)?;
+        state.role_provider.set(deps.storage, &role, address)?;
     }
-    Ok(Response::new().add_attribute("action", "ultra_role_provider/instantiate"))
+    Ok(Response::new().add_attribute("action", "ultra/role_provider/instantiate"))
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -43,10 +49,11 @@ pub fn execute(
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
+pub fn query(deps: Deps, _env: Env, msg: QueryMsg<Role>) -> StdResult<Binary> {
     let state = State::default();
     match msg {
         QueryMsg::HasAnyRole { address, roles } => {
+            let address = deps.api.addr_validate(&address)?;
             let has_role = state
                 .role_provider
                 .has_any_role(deps.storage, &roles, &address)?;
@@ -109,7 +116,8 @@ mod tests {
         testing::{mock_dependencies, mock_info},
         Addr, Empty,
     };
-    use ultra_controllers::roles::{Role, RoleProvider, RolesError};
+    use ultra_base::role_provider::Role;
+    use ultra_controllers::roles::{RoleProvider, RolesError};
 
     use crate::{
         contract::{execute, execute_update_role, query, query_role_address},
