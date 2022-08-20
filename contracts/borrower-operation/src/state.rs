@@ -4,19 +4,6 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
-pub struct AddressesSet {
-    pub trove_manager_address: Addr,
-    pub stability_pool_address: Addr,
-    pub default_pool_address: Addr,
-    pub active_pool_address: Addr,
-    pub coll_surplus_pool_address: Addr,
-    pub ultra_token_contract_address: Addr,
-    pub price_feed_contract_address: Addr,
-    pub sorted_troves_address: Addr,
-    pub reward_pool_address: Addr,
-}
-
-#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 pub struct Trove {
     price: Uint128,
     ultra_fee: Uint128,
@@ -34,4 +21,3 @@ pub struct SudoParams {
 }
 
 pub const SUDO_PARAMS: Item<SudoParams> = Item::new("sudo-params");
-pub const ADDRESSES_SET: Item<AddressesSet> = Item::new("addresses_set");

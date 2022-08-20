@@ -32,8 +32,6 @@ pub enum QueryMsg {
     GetParams {},
     GetJUNO {},
     GetULTRADebt {},
-    GetActivePoolAddress {},
-    GetTroveManagerAddress {},
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

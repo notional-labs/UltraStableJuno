@@ -1,4 +1,3 @@
-
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -10,6 +9,12 @@ pub enum Role {
     Owner,
     StabilityPool,
     BorrowerOperations,
+    DefaultPool,
+    CollateralSurplusPool,
+    UltraToken,
+    PriceFeed,
+    SortedTroves,
+    RewardPool,
 }
 
 impl ToString for Role {
@@ -20,6 +25,12 @@ impl ToString for Role {
             Role::Owner => "owner",
             Role::StabilityPool => "stability_pool",
             Role::BorrowerOperations => "borrower_operations",
+            Role::DefaultPool => "default_pool",
+            Role::CollateralSurplusPool => "collateral_surplus_pool",
+            Role::UltraToken => "ultra_token",
+            Role::PriceFeed => "price_feed",
+            Role::SortedTroves => "sorted_troves",
+            Role::RewardPool => "reward_pool",
         }
         .into()
     }
@@ -32,6 +43,7 @@ pub struct InstantiateMsg {
     pub trove_manager: String,
     pub owner: String,
     pub stability_pool: String,
+    pub borrower_operations: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

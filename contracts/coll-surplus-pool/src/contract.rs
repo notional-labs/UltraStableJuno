@@ -11,8 +11,7 @@ use cw2::set_contract_version;
 
 use crate::error::ContractError;
 use crate::state::{
-    AddressesSet, SudoParams, TotalCollsInPool, ADDRESSES_SET, COLL_OF_ACCOUNT, SUDO_PARAMS,
-    TOTAL_COLLS_IN_POOL,
+    SudoParams, TotalCollsInPool, COLL_OF_ACCOUNT, SUDO_PARAMS, TOTAL_COLLS_IN_POOL,
 };
 use ultra_base::coll_surplus_pool::{ExecuteMsg, InstantiateMsg, ParamsResponse, QueryMsg};
 
@@ -60,19 +59,6 @@ pub fn execute(
             execute_account_surplus(deps, env, info, account, amount)
         }
         ExecuteMsg::ClaimColl { account } => execute_claim_coll(deps, env, info, account),
-
-        ExecuteMsg::SetAddresses {
-            borrower_operations_address,
-            trove_manager_address,
-            active_pool_address,
-        } => execute_set_addresses(
-            deps,
-            env,
-            info,
-            borrower_operations_address,
-            trove_manager_address,
-            active_pool_address,
-        ),
     }
 }
 
@@ -130,55 +116,6 @@ pub fn execute_claim_coll(
     Ok(res)
 }
 
-pub fn execute_set_addresses(
-    deps: DepsMut,
-    _env: Env,
-    info: MessageInfo,
-    borrower_operations_address: String,
-    trove_manager_address: String,
-    active_pool_address: String,
-) -> Result<Response, ContractError> {
-    only_owner(deps.storage, &info)?;
-
-    let new_addresses_set = AddressesSet {
-        borrower_operations_address: deps.api.addr_validate(&borrower_operations_address)?,
-        trove_manager_address: deps.api.addr_validate(&trove_manager_address)?,
-        active_pool_address: deps.api.addr_validate(&active_pool_address)?,
-    };
-
-    ADDRESSES_SET.save(deps.storage, &new_addresses_set)?;
-    let res = Response::new()
-        .add_attribute("action", "set_addresses")
-        .add_attribute("borrower_operations_address", borrower_operations_address)
-        .add_attribute("trove_manager_address", trove_manager_address)
-        .add_attribute("stability_pool_address", active_pool_address);
-    Ok(res)
-}
-
-/// Checks to enfore only borrower operations can call
-fn only_bo(store: &dyn Storage, info: &MessageInfo) -> Result<Addr, ContractError> {
-    let addresses_set = ADDRESSES_SET.load(store)?;
-    if addresses_set.borrower_operations_address != info.sender.as_ref() {
-        return Err(ContractError::CallerIsNotBO {});
-    }
-    Ok(info.sender.clone())
-}
-/// Checks to enfore only trove manager can call
-fn only_tm(store: &dyn Storage, info: &MessageInfo) -> Result<Addr, ContractError> {
-    let addresses_set = ADDRESSES_SET.load(store)?;
-    if addresses_set.trove_manager_address != info.sender.as_ref() {
-        return Err(ContractError::CallerIsNotTM {});
-    }
-    Ok(info.sender.clone())
-}
-/// Checks to enfore only active pool can call
-fn only_ap(store: &dyn Storage, info: &MessageInfo) -> Result<Addr, ContractError> {
-    let addresses_set = ADDRESSES_SET.load(store)?;
-    if addresses_set.trove_manager_address != info.sender.as_ref() {
-        return Err(ContractError::CallerIsNotTM {});
-    }
-    Ok(info.sender.clone())
-}
 /// Checks to enfore only owner can call
 fn only_owner(store: &dyn Storage, info: &MessageInfo) -> Result<Addr, ContractError> {
     let params = SUDO_PARAMS.load(store)?;

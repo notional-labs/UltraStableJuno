@@ -5,14 +5,6 @@ use serde::{Deserialize, Serialize};
 use ultra_controllers::roles::RoleConsumer;
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
-pub struct AddressesSet {
-    pub borrower_operations_address: Addr,
-    pub trove_manager_address: Addr,
-    pub stability_pool_address: Addr,
-    pub default_pool_address: Addr,
-}
-
-#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 pub struct AssetsInPool {
     pub juno: Uint128,
     pub ultra_debt: Uint128,
@@ -37,5 +29,4 @@ impl<'a> Default for State<'a> {
 }
 
 pub const SUDO_PARAMS: Item<SudoParams> = Item::new("sudo-params");
-pub const ADDRESSES_SET: Item<AddressesSet> = Item::new("addresses_set");
 pub const ASSETS_IN_POOL: Item<AssetsInPool> = Item::new("assets_in_pool");

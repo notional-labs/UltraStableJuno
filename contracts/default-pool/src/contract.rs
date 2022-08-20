@@ -10,9 +10,7 @@ use cosmwasm_std::{
 use cw2::set_contract_version;
 
 use crate::error::ContractError;
-use crate::state::{
-    AddressesSet, AssetsInPool, SudoParams, ADDRESSES_SET, ASSETS_IN_POOL, SUDO_PARAMS,
-};
+use crate::state::{AssetsInPool, SudoParams, ASSETS_IN_POOL, SUDO_PARAMS};
 use ultra_base::default_pool::{ExecuteMsg, InstantiateMsg, ParamsResponse, QueryMsg};
 
 // version info for migration info
@@ -138,44 +136,6 @@ pub fn execute_send_juno_to_active_pool(
     Ok(res)
 }
 
-pub fn execute_set_addresses(
-    deps: DepsMut,
-    _env: Env,
-    info: MessageInfo,
-    trove_manager_address: String,
-    active_pool_address: String,
-) -> Result<Response, ContractError> {
-    only_owner(deps.storage, &info)?;
-
-    let new_addresses_set = AddressesSet {
-        trove_manager_address: deps.api.addr_validate(&trove_manager_address)?,
-        active_pool_address: deps.api.addr_validate(&active_pool_address)?,
-    };
-
-    ADDRESSES_SET.save(deps.storage, &new_addresses_set)?;
-    let res = Response::new()
-        .add_attribute("action", "set_addresses")
-        .add_attribute("trove_manager_address", trove_manager_address)
-        .add_attribute("active_pool_address", active_pool_address);
-    Ok(res)
-}
-
-/// Checks to enfore only active pool can call
-fn only_ap(store: &dyn Storage, info: &MessageInfo) -> Result<Addr, ContractError> {
-    let addresses_set = ADDRESSES_SET.load(store)?;
-    if addresses_set.active_pool_address != info.sender.as_ref() {
-        return Err(ContractError::CallerIsNotAP {});
-    }
-    Ok(info.sender.clone())
-}
-/// Checks to enfore only trove manager can call
-fn only_tm(store: &dyn Storage, info: &MessageInfo) -> Result<Addr, ContractError> {
-    let addresses_set = ADDRESSES_SET.load(store)?;
-    if addresses_set.trove_manager_address != info.sender.as_ref() {
-        return Err(ContractError::CallerIsNotTM {});
-    }
-    Ok(info.sender.clone())
-}
 /// Checks to enfore only owner can call
 fn only_owner(store: &dyn Storage, info: &MessageInfo) -> Result<Addr, ContractError> {
     let params = SUDO_PARAMS.load(store)?;
@@ -191,8 +151,6 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::GetParams {} => to_binary(&query_params(deps)?),
         QueryMsg::GetJUNO {} => to_binary(&query_juno_state(deps)?),
         QueryMsg::GetULTRADebt {} => to_binary(&query_ultra_debt_state(deps)?),
-        QueryMsg::GetActivePoolAddress {} => to_binary(&query_active_pool_address(deps)?),
-        QueryMsg::GetTroveManagerAddress {} => to_binary(&query_trove_manager_address(deps)?),
     }
 }
 
@@ -215,16 +173,4 @@ pub fn query_params(deps: Deps) -> StdResult<ParamsResponse> {
         owner: info.owner,
     };
     Ok(res)
-}
-
-pub fn query_active_pool_address(deps: Deps) -> StdResult<Addr> {
-    let addresses_set = ADDRESSES_SET.load(deps.storage)?;
-    let active_pool_address = addresses_set.active_pool_address;
-    Ok(active_pool_address)
-}
-
-pub fn query_trove_manager_address(deps: Deps) -> StdResult<Addr> {
-    let addresses_set = ADDRESSES_SET.load(deps.storage)?;
-    let trove_manager_address = addresses_set.trove_manager_address;
-    Ok(trove_manager_address)
 }

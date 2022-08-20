@@ -27,6 +27,7 @@ pub fn instantiate(
         (Role::StabilityPool, msg.stability_pool),
         (Role::TroveManager, msg.trove_manager),
         (Role::ActivePool, msg.active_pool),
+        (Role::BorrowerOperations, msg.borrower_operations),
     ] {
         let address = deps.api.addr_validate(&address)?;
         state.role_provider.set(deps.storage, &role, address)?;
