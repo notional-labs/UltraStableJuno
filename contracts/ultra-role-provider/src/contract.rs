@@ -1,7 +1,7 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
+    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
 };
 use cw2::set_contract_version;
 use ultra_base::role_provider::{HasAnyRoleResponse, Role, RoleAddressResponse};
@@ -78,7 +78,7 @@ pub fn execute_update_role(
 
     match &address {
         Some(address) => {
-            let address = deps.api.addr_validate(&address)?;
+            let address = deps.api.addr_validate(address)?;
             state.role_provider.set(deps.storage, &role, address)
         }
         None => {

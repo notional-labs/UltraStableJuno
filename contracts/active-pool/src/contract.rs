@@ -12,7 +12,7 @@ use ultra_base::role_provider::Role;
 
 use crate::error::ContractError;
 use crate::state::{
-    AddressesSet, AssetsInPool, State, SudoParams, ADDRESSES_SET, ASSETS_IN_POOL, SUDO_PARAMS,
+    AssetsInPool, State, SudoParams, ASSETS_IN_POOL, SUDO_PARAMS,
 };
 use ultra_base::active_pool::{ExecuteMsg, InstantiateMsg, ParamsResponse, QueryMsg};
 

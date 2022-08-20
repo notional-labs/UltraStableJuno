@@ -1,12 +1,12 @@
 // based on https://github.com/CosmWasm/cw-plus/blob/main/packages/controllers/src/admin.rs
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use std::{fmt, marker::PhantomData};
+
+use serde::{Serialize};
+use std::{marker::PhantomData};
 use thiserror::Error;
 use ultra_base::role_provider::Role;
 
 use cosmwasm_std::{
-    attr, Addr, CustomQuery, Deps, DepsMut, MessageInfo, Response, StdError, StdResult, Storage,
+    Addr, Deps, StdError, StdResult, Storage,
 };
 use cw_storage_plus::{index_list, IndexedMap, Item, MultiIndex};
 
@@ -143,14 +143,14 @@ impl<'a, Role: ToString> RoleProvider<'a, Role> {
         caller: &Addr,
     ) -> Result<(), RolesError> {
         for role in roles {
-            if !self.has_role(store, &role, caller)? {
+            if !self.has_role(store, role, caller)? {
                 continue;
             } else {
                 return Ok(());
             }
         }
         let label = roles
-            .into_iter()
+            .iter()
             .map(|r| r.to_string())
             .collect::<Vec<String>>()
             .join(" | ");
@@ -165,7 +165,7 @@ impl<'a, Role: ToString> RoleProvider<'a, Role> {
         role: &Role,
         caller: &Addr,
     ) -> Result<(), RolesError> {
-        if !self.has_role(store, &role, caller)? {
+        if !self.has_role(store, role, caller)? {
             Err(RolesError::UnauthorizedForRole {
                 label: role.to_string(),
             })
@@ -179,8 +179,8 @@ impl<'a, Role: ToString> RoleProvider<'a, Role> {
 mod tests {
     use super::*;
 
-    use cosmwasm_std::testing::{mock_dependencies, mock_info};
-    use cosmwasm_std::Empty;
+    use cosmwasm_std::testing::{mock_dependencies};
+    
 
     enum Role {
         Owner,
