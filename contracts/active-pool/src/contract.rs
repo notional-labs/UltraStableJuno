@@ -11,9 +11,7 @@ use cw2::set_contract_version;
 use ultra_base::role_provider::Role;
 
 use crate::error::ContractError;
-use crate::state::{
-    AssetsInPool, State, SudoParams, ASSETS_IN_POOL, SUDO_PARAMS,
-};
+use crate::state::{AssetsInPool, State, SudoParams, ASSETS_IN_POOL, SUDO_PARAMS};
 use ultra_base::active_pool::{ExecuteMsg, InstantiateMsg, ParamsResponse, QueryMsg};
 
 // version info for migration info
@@ -134,7 +132,11 @@ pub fn execute_send_juno(
     state.roles.assert_role(
         deps.as_ref(),
         &info.sender,
-        vec![Role::BorrowerOperations, Role::TroveManager],
+        vec![
+            Role::BorrowerOperations,
+            Role::TroveManager,
+            Role::StabilityPool,
+        ],
     )?;
 
     let mut assets_in_pool = ASSETS_IN_POOL.load(deps.storage)?;

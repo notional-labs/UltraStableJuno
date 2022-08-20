@@ -1,13 +1,11 @@
 // based on https://github.com/CosmWasm/cw-plus/blob/main/packages/controllers/src/admin.rs
 
-use serde::{Serialize};
-use std::{marker::PhantomData};
+use serde::Serialize;
+use std::marker::PhantomData;
 use thiserror::Error;
 use ultra_base::role_provider::Role;
 
-use cosmwasm_std::{
-    Addr, Deps, StdError, StdResult, Storage,
-};
+use cosmwasm_std::{Addr, Deps, StdError, StdResult, Storage};
 use cw_storage_plus::{index_list, IndexedMap, Item, MultiIndex};
 
 /// Errors returned from Admin
@@ -179,8 +177,7 @@ impl<'a, Role: ToString> RoleProvider<'a, Role> {
 mod tests {
     use super::*;
 
-    use cosmwasm_std::testing::{mock_dependencies};
-    
+    use cosmwasm_std::testing::mock_dependencies;
 
     enum Role {
         Owner,
