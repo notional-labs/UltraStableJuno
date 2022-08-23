@@ -125,7 +125,7 @@ impl<'a, Role: ToString> RoleProvider<'a, Role> {
                 // if any exists, stop iteration and return true result
                 return Ok(true);
             } else {
-                continue;
+                // check next role
             }
         }
         // if nothing was returned, none exists. return false.
@@ -140,19 +140,16 @@ impl<'a, Role: ToString> RoleProvider<'a, Role> {
         roles: &[Role],
         caller: &Addr,
     ) -> Result<(), RolesError> {
-        for role in roles {
-            if !self.has_role(store, role, caller)? {
-                continue;
-            } else {
-                return Ok(());
-            }
+        if self.has_any_role(store, roles, caller)? {
+            Ok(())
+        } else {
+            let label = roles
+                .iter()
+                .map(|r| r.to_string())
+                .collect::<Vec<String>>()
+                .join(" | ");
+            Err(RolesError::UnauthorizedForRole { label })
         }
-        let label = roles
-            .iter()
-            .map(|r| r.to_string())
-            .collect::<Vec<String>>()
-            .join(" | ");
-        Err(RolesError::UnauthorizedForRole { label })
     }
 
     /// Like has_role but returns RolesError::UnauthorizedForRole if not authorized.
