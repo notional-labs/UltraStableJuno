@@ -8,10 +8,11 @@ use cosmwasm_std::{
 };
 
 use cw2::set_contract_version;
+use ultra_base::role_provider::Role;
 
 use crate::error::ContractError;
 use crate::state::{
-    SudoParams, TotalCollsInPool, COLL_OF_ACCOUNT, SUDO_PARAMS, TOTAL_COLLS_IN_POOL,
+    State, SudoParams, TotalCollsInPool, COLL_OF_ACCOUNT, SUDO_PARAMS, TOTAL_COLLS_IN_POOL,
 };
 use ultra_base::coll_surplus_pool::{ExecuteMsg, InstantiateMsg, ParamsResponse, QueryMsg};
 
@@ -69,7 +70,10 @@ pub fn execute_account_surplus(
     account: Addr,
     amount: Uint128,
 ) -> Result<Response, ContractError> {
-    only_tm(deps.storage, &info)?;
+    let state = State::default();
+    state
+        .roles
+        .assert_role(deps.as_ref(), &info.sender, vec![Role::TroveManager])?;
 
     let mut coll_of_account = COLL_OF_ACCOUNT.load(deps.storage, account.clone())?;
     coll_of_account += amount;
@@ -87,7 +91,10 @@ pub fn execute_claim_coll(
     info: MessageInfo,
     account: Addr,
 ) -> Result<Response, ContractError> {
-    only_bo(deps.storage, &info)?;
+    let state = State::default();
+    state
+        .roles
+        .assert_role(deps.as_ref(), &info.sender, vec![Role::BorrowerOperations])?;
 
     let mut coll_of_account = COLL_OF_ACCOUNT.load(deps.storage, account.clone())?;
     let mut total_colls_in_pool = TOTAL_COLLS_IN_POOL.load(deps.storage)?;
@@ -131,11 +138,6 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::GetParams {} => to_binary(&query_params(deps)?),
         QueryMsg::GetJUNO {} => to_binary(&query_juno_state(deps)?),
         QueryMsg::GetCollateral { account } => to_binary(&query_coll_of_account(deps, account)?),
-        QueryMsg::GetBorrowerOperationsAddress {} => {
-            to_binary(&query_borrower_operations_address(deps)?)
-        }
-        QueryMsg::GetActivePoolAddress {} => to_binary(&query_active_pool_address(deps)?),
-        QueryMsg::GetTroveManagerAddress {} => to_binary(&query_trove_manager_address(deps)?),
     }
 }
 
@@ -157,22 +159,4 @@ pub fn query_params(deps: Deps) -> StdResult<ParamsResponse> {
         owner: info.owner,
     };
     Ok(res)
-}
-
-pub fn query_borrower_operations_address(deps: Deps) -> StdResult<Addr> {
-    let addresses_set = ADDRESSES_SET.load(deps.storage)?;
-    let borrower_operations_address = addresses_set.borrower_operations_address;
-    Ok(borrower_operations_address)
-}
-
-pub fn query_active_pool_address(deps: Deps) -> StdResult<Addr> {
-    let addresses_set = ADDRESSES_SET.load(deps.storage)?;
-    let active_pool_address = addresses_set.active_pool_address;
-    Ok(active_pool_address)
-}
-
-pub fn query_trove_manager_address(deps: Deps) -> StdResult<Addr> {
-    let addresses_set = ADDRESSES_SET.load(deps.storage)?;
-    let trove_manager_address = addresses_set.trove_manager_address;
-    Ok(trove_manager_address)
 }

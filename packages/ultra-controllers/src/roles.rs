@@ -39,6 +39,16 @@ impl<'a, Role: ToString + Serialize> RoleConsumer<'a, Role> {
         RoleConsumer(Item::new(role_provider_addr_namespace), PhantomData)
     }
 
+    pub fn load_role_address(&self, deps: Deps, role: Role) -> Result<Addr, RolesError> {
+        let role_provider_addr = self.0.load(deps.storage)?;
+        let res: ultra_base::role_provider::RoleAddressResponse = deps.querier.query_wasm_smart(
+            role_provider_addr,
+            &ultra_base::role_provider::QueryMsg::<Role>::RoleAddress { role },
+        )?;
+        let address = deps.api.addr_validate(&res.address)?;
+        Ok(address)
+    }
+
     pub fn assert_role(
         &self,
         deps: Deps,

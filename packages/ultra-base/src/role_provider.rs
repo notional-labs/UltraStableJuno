@@ -68,7 +68,7 @@ pub struct HasAnyRoleResponse {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct RoleAddressResponse {
-    pub address: Option<String>,
+    pub address: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

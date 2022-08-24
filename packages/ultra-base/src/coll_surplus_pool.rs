@@ -21,9 +21,6 @@ pub enum QueryMsg {
     GetParams {},
     GetJUNO {},
     GetCollateral { account: Addr },
-    GetBorrowerOperationsAddress {},
-    GetActivePoolAddress {},
-    GetTroveManagerAddress {},
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

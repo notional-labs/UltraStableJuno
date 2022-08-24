@@ -79,6 +79,7 @@ dependencies = [
  "serde",
  "thiserror",
  "ultra-base",
+ "ultra-controllers",
 ]
 
 [[package]]

@@ -108,7 +108,10 @@ pub fn query_role_address(deps: Deps, role: Role) -> StdResult<RoleAddressRespon
         .role_provider
         .get(deps.storage, &role)?
         .map(String::from);
-    Ok(RoleAddressResponse { address: addr })
+    addr.map_or_else(
+        || Err(StdError::generic_err("role not found")),
+        |addr| Ok(RoleAddressResponse { address: addr }),
+    )
 }
 
 #[cfg(test)]
@@ -140,7 +143,7 @@ mod tests {
 
         // query shows results
         let res = query_role_address(deps.as_ref(), Role::Owner).unwrap();
-        assert_eq!(Some(owner.to_string()), res.address);
+        assert_eq!(owner.to_string(), res.address);
 
         // imposter cannot update
         let info = mock_info(imposter.as_ref(), &[]);
@@ -172,6 +175,6 @@ mod tests {
 
         // query shows results
         let res = query_role_address(deps.as_ref(), Role::Owner).unwrap();
-        assert_eq!(Some(friend.to_string()), res.address);
+        assert_eq!(friend.to_string(), res.address);
     }
 }

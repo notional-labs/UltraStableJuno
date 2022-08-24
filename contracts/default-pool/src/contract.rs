@@ -8,9 +8,10 @@ use cosmwasm_std::{
 };
 
 use cw2::set_contract_version;
+use ultra_base::role_provider::Role;
 
 use crate::error::ContractError;
-use crate::state::{AssetsInPool, SudoParams, ASSETS_IN_POOL, SUDO_PARAMS};
+use crate::state::{AssetsInPool, State, SudoParams, ASSETS_IN_POOL, SUDO_PARAMS};
 use ultra_base::default_pool::{ExecuteMsg, InstantiateMsg, ParamsResponse, QueryMsg};
 
 // version info for migration info
@@ -63,10 +64,6 @@ pub fn execute(
         ExecuteMsg::SendJUNOToActivePool { amount } => {
             execute_send_juno_to_active_pool(deps, env, info, amount)
         }
-        ExecuteMsg::SetAddresses {
-            trove_manager_address,
-            active_pool_address,
-        } => execute_set_addresses(deps, env, info, trove_manager_address, active_pool_address),
     }
 }
 
@@ -76,7 +73,10 @@ pub fn execute_increase_ultra_debt(
     info: MessageInfo,
     amount: Uint128,
 ) -> Result<Response, ContractError> {
-    only_tm(deps.storage, &info)?;
+    let state = State::default();
+    state
+        .roles
+        .assert_role(deps.as_ref(), &info.sender, vec![Role::TroveManager])?;
 
     let mut assets_in_pool = ASSETS_IN_POOL.load(deps.storage)?;
     assets_in_pool.ultra_debt += amount;
@@ -93,7 +93,10 @@ pub fn execute_decrease_ultra_debt(
     info: MessageInfo,
     amount: Uint128,
 ) -> Result<Response, ContractError> {
-    only_tm(deps.storage, &info)?;
+    let state = State::default();
+    state
+        .roles
+        .assert_role(deps.as_ref(), &info.sender, vec![Role::TroveManager])?;
 
     let mut assets_in_pool = ASSETS_IN_POOL.load(deps.storage)?;
     assets_in_pool.ultra_debt = assets_in_pool
@@ -113,7 +116,10 @@ pub fn execute_send_juno_to_active_pool(
     info: MessageInfo,
     amount: Uint128,
 ) -> Result<Response, ContractError> {
-    only_tm(deps.storage, &info)?;
+    let state = State::default();
+    state
+        .roles
+        .assert_role(deps.as_ref(), &info.sender, vec![Role::TroveManager])?;
 
     let mut assets_in_pool = ASSETS_IN_POOL.load(deps.storage)?;
     assets_in_pool.juno = assets_in_pool
@@ -122,8 +128,10 @@ pub fn execute_send_juno_to_active_pool(
         .map_err(StdError::overflow)?;
     ASSETS_IN_POOL.save(deps.storage, &assets_in_pool)?;
 
-    let addresses_set = ADDRESSES_SET.load(deps.storage)?;
-    let active_pool_address = addresses_set.active_pool_address;
+    let active_pool_address = state
+        .roles
+        .load_role_address(deps.as_ref(), Role::ActivePool)?;
+
     let send_msg = BankMsg::Send {
         to_address: active_pool_address.to_string(),
         amount: vec![coin(amount.u128(), NATIVE_JUNO_DENOM.to_string())],

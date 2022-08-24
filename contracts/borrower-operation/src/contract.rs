@@ -8,7 +8,7 @@ use cosmwasm_std::{
 use cw2::set_contract_version;
 
 use crate::error::ContractError;
-use crate::state::{SudoParams, ADDRESSES_SET, SUDO_PARAMS};
+use crate::state::{SudoParams, SUDO_PARAMS};
 use ultra_base::borrower_operations::{ExecuteMsg, InstantiateMsg, ParamsResponse, QueryMsg};
 use ultra_base::querier::{query_entire_system_coll, query_entire_system_debt};
 
