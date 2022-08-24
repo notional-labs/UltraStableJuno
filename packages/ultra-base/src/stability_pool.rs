@@ -16,14 +16,6 @@ pub enum ExecuteMsg {
     WithdrawJUNOGainToTrove {},
     RegisterFrontEnd {},
     Offset {},
-    SetAddresses {
-        borrower_operations_address: String,
-        trove_manager_address: String,
-        active_pool_address: String,
-        ultra_token_address: String,
-        sorted_troves_address: String,
-        price_feed_address: String,
-    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

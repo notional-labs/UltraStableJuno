@@ -20,10 +20,6 @@ pub enum ExecuteMsg {
         debt: Uint128,
         price: Uint128,
     },
-    SetAddresses {
-        sorted_troves_address: String,
-        trove_manager_address: String,
-    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -35,7 +31,11 @@ pub enum QueryMsg {
         price: Uint128,
         max_iterations: Uint128,
     },
-    GetApproxHint {cr: Uint128, num_trials: Uint128, input_random_seed: Uint128},
+    GetApproxHint {
+        cr: Uint128,
+        num_trials: Uint128,
+        input_random_seed: Uint128,
+    },
     GetSortedTrovesAddress {},
     GetTroveManagerAddress {},
 }
