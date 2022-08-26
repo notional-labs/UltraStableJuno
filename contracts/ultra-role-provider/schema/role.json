@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Role",
+  "type": "string",
+  "enum": [
+    "active_pool",
+    "trove_manager",
+    "owner",
+    "stability_pool"
+  ]
+}

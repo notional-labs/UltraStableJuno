@@ -7,15 +7,9 @@ pub enum ContractError {
     #[error("{0}")]
     Std(#[from] StdError),
 
+    #[error("Custom Error val: {val:?}")]
+    CustomError { val: String },
+
     #[error("{0}")]
     UnauthorizedForRole(#[from] RolesError),
-
-    #[error("UnauthorizedOwner")]
-    UnauthorizedOwner {},
-
-    #[error("DefaultPool: Caller is not the ActivePool")]
-    CallerIsNotAP {},
-
-    #[error("DefaultPool: Caller is not the TroveManager")]
-    CallerIsNotTM {},
 }
