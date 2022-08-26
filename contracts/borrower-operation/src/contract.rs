@@ -1,8 +1,8 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    coin, to_binary, Addr, BankMsg, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError,
-    StdResult, Storage, Uint128,
+    coin, to_binary, Addr, BankMsg, Binary, Decimal, Decimal256, Deps, DepsMut, Env, MessageInfo,
+    Response, StdError, StdResult, Storage, Uint128,
 };
 
 use cw2::set_contract_version;
@@ -57,8 +57,9 @@ pub fn execute(
             info,
             max_fee_percentage,
             ultra_amount,
-            upper_hint,
-            lower_hint,
+            // ignoring hints for now, on the assumption we can use storage indexing instead.
+            // upper_hint,
+            // lower_hint,
         ),
         ExecuteMsg::AdjustTrove {
             borrower,
@@ -68,29 +69,30 @@ pub fn execute(
             max_fee_percentage,
             upper_hint,
             lower_hint,
-        } => execute_adjust_trove(
-            deps,
-            env,
-            info,
-            borrower,
-            coll_withdrawal,
-            ultra_change,
-            is_debt_increase,
-            max_fee_percentage,
-            upper_hint,
-            lower_hint,
-        ),
-        ExecuteMsg::CloseTrove {} => execute_close_trove(deps, env, info),
+        } => todo!(),
+        // execute_adjust_trove(
+        //     deps,
+        //     env,
+        //     info,
+        //     borrower,
+        //     coll_withdrawal,
+        //     ultra_change,
+        //     is_debt_increase,
+        //     max_fee_percentage,
+        //     upper_hint,
+        //     lower_hint,
+        // ),
+        ExecuteMsg::CloseTrove {} => todo!(), // execute_close_trove(deps, env, info),
         ExecuteMsg::AddColl {
             upper_hint,
             lower_hint,
-        } => execute_add_coll(deps, env, info, upper_hint, lower_hint),
+        } => todo!(), // execute_add_coll(deps, env, info, upper_hint, lower_hint),
         ExecuteMsg::WithdrawColl {
             coll_amount,
             upper_hint,
             lower_hint,
-        } => execute_withdraw_coll(deps, env, info, coll_amount, upper_hint, lower_hint),
-        ExecuteMsg::ClaimCollateral {} => execute_claim_collateral(deps, env, info),
+        } => todo!(), // execute_withdraw_coll(deps, env, info, coll_amount, upper_hint, lower_hint),
+        ExecuteMsg::ClaimCollateral {} => todo!(), // execute_claim_collateral(deps, env, info),
         ExecuteMsg::RepayULTRA {
             active_pool_addr,
             ultra_token_addr,
@@ -98,43 +100,47 @@ pub fn execute(
             ultra_amount,
             upper_hint,
             lower_hint,
-        } => execute_repay_ultra(
-            deps,
-            env,
-            info,
-            active_pool_addr,
-            ultra_token_addr,
-            account,
-            ultra_amount,
-            upper_hint,
-            lower_hint,
-        ),
+        } => todo!(),
+        // execute_repay_ultra(
+        //     deps,
+        //     env,
+        //     info,
+        //     active_pool_addr,
+        //     ultra_token_addr,
+        //     account,
+        //     ultra_amount,
+        //     upper_hint,
+        //     lower_hint,
+        // ),
         ExecuteMsg::WithdrawULTRA {
             max_fee_percentage,
             ultra_amount,
             upper_hint,
             lower_hint,
-        } => execute_withdraw_ultra(
-            deps,
-            env,
-            info,
-            max_fee_percentage,
-            ultra_amount,
-            upper_hint,
-            lower_hint,
-        ),
+        } => todo!(),
+        // execute_withdraw_ultra(
+        //     deps,
+        //     env,
+        //     info,
+        //     max_fee_percentage,
+        //     ultra_amount,
+        //     upper_hint,
+        //     lower_hint,
+        // ),
         ExecuteMsg::MoveJUNOGainToTrove {
             borrower,
             upper_hint,
             lower_hint,
-        } => execute_move_juno_gain_to_trove(deps, env, info, borrower, upper_hint, lower_hint),
+        } => todo!(), //  execute_move_juno_gain_to_trove(deps, env, info, borrower, upper_hint, lower_hint),
     }
 }
 
+// liquity source: https://github.com/liquity/dev/blob/main/packages/contracts/contracts/BorrowerOperations.sol#L156
 pub fn execute_open_trove(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
+    max_fee_percentage: Decimal256,
     amount: Uint128,
 ) -> Result<Response, ContractError> {
     let res = Response::new().add_attribute("action", "open_trove");
