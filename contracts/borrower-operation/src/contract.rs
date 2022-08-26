@@ -8,8 +8,8 @@ use cosmwasm_std::{
 use cw2::set_contract_version;
 
 use crate::error::ContractError;
+use crate::msg::{ExecuteMsg, InstantiateMsg, ParamsResponse, QueryMsg};
 use crate::state::{SudoParams, SUDO_PARAMS};
-use ultra_base::borrower_operations::{ExecuteMsg, InstantiateMsg, ParamsResponse, QueryMsg};
 use ultra_base::querier::{query_entire_system_coll, query_entire_system_debt};
 
 // version info for migration info

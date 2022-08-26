@@ -11,8 +11,8 @@ use cw2::set_contract_version;
 use ultra_base::role_provider::Role;
 
 use crate::error::ContractError;
+use crate::msg::{ExecuteMsg, InstantiateMsg, ParamsResponse, QueryMsg};
 use crate::state::{AssetsInPool, State, SudoParams, ASSETS_IN_POOL, SUDO_PARAMS};
-use ultra_base::active_pool::{ExecuteMsg, InstantiateMsg, ParamsResponse, QueryMsg};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:active-pool";
