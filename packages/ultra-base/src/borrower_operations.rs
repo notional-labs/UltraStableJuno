@@ -1,4 +1,4 @@
-use cosmwasm_std::{Addr, Decimal256, Uint128};
+use cosmwasm_std::{Addr, Decimal256, Uint128, Uint256};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -37,9 +37,14 @@ pub enum ExecuteMsg {
     },
     OpenTrove {
         max_fee_percentage: Decimal256,
-        ultra_amount: Uint128,
+        ultra_amount: Uint256,
         upper_hint: Addr,
         lower_hint: Addr,
+    },
+    // called during OpenTrove
+    CollectBorrowingFee {
+        max_fee_percentage: Decimal256,
+        stable_amount: Uint256,
     },
     /// Burn the specified amount of ULTRA from `account` and decreases the total active debt
     RepayULTRA {

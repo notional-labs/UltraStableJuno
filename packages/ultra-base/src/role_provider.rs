@@ -15,6 +15,7 @@ pub enum Role {
     PriceFeed,
     SortedTroves,
     RewardPool,
+    BorrowerFeeDistributor,
 }
 
 impl ToString for Role {
@@ -31,6 +32,7 @@ impl ToString for Role {
             Role::PriceFeed => "price_feed",
             Role::SortedTroves => "sorted_troves",
             Role::RewardPool => "reward_pool",
+            Role::BorrowerFeeDistributor => "borrower_fee_distributor",
         }
         .into()
     }

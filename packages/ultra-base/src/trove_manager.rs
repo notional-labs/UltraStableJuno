@@ -1,4 +1,4 @@
-use cosmwasm_std::{Addr, Uint128};
+use cosmwasm_std::{Addr, Decimal256, Uint128, Uint256};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -96,8 +96,8 @@ pub enum QueryMsg {
     GetPendingULTRADebtReward {},
     GetEntireDebtAndColl { borrower: String },
     GetTCR {},
-    GetBorrowingFee { ultra_debt: Uint128 },
-    GetBorrowingFeeWithDecay { ultra_debt: Uint128 },
+    GetBorrowingFee { ultra_debt: Uint256 },
+    GetBorrowingFeeWithDecay { ultra_debt: Uint256 },
     GetBorrowingRate {},
     GetBorrowingRateWithDecay {},
     GetRedemptionRate {},
@@ -130,4 +130,9 @@ pub enum SudoMsg {
 pub struct ParamsResponse {
     pub name: String,
     pub owner: Addr,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct GetBorrowingFeeResponse {
+    pub fee: Uint256,
 }

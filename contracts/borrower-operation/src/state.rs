@@ -1,4 +1,4 @@
-use cosmwasm_std::{Addr, Decimal256, Uint128};
+use cosmwasm_std::{Addr, Decimal256, Uint128, Uint256};
 use cw_storage_plus::Item;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -21,14 +21,25 @@ pub struct SudoParams {
     pub owner: Addr,
 }
 
+// temp state only lives for the duration of a single execution
+pub struct TempState<'a> {
+    pub borrowing_fee: Item<'a, Uint256>,
+    pub net_debt: Item<'a, Uint256>,
+}
+
 pub struct State<'a> {
     pub roles: RoleConsumer<'a>,
+    pub temp: TempState<'a>,
 }
 
 impl<'a> Default for State<'a> {
     fn default() -> Self {
         State {
             roles: RoleConsumer::new("role_provider_address"),
+            temp: TempState {
+                borrowing_fee: Item::new("temp_borrowing_fee"),
+                net_debt: Item::new("temp_net_debt"),
+            },
         }
     }
 }
