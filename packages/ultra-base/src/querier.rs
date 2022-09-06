@@ -1,7 +1,8 @@
 use crate::active_pool::QueryMsg as ActivePoolQueryMsg;
 use crate::asset::{AssetInfo, PoolInfo};
 use crate::default_pool::QueryMsg as DefaultPoolQueryMsg;
-use crate::ultra_math;
+use crate::ultra_math::{self, DECIMAL_PRECISION};
+use crate::{price_feed, trove_manager};
 
 use cosmwasm_std::{
     Addr, AllBalanceResponse, BankQuery, Coin, Decimal256, QuerierWrapper, QueryRequest, StdError,
@@ -180,7 +181,64 @@ pub fn check_recovery_mode(
     price: Decimal256,
     active_pool_addr: Addr,
     default_pool_addr: Addr,
-) -> bool {
-    let tcr = get_tcr(querier, price, active_pool_addr, default_pool_addr).unwrap();
-    tcr < CCR
+) -> StdResult<bool> {
+    let tcr = get_tcr(querier, price, active_pool_addr, default_pool_addr)?;
+    Ok(tcr < CCR)
+}
+
+pub fn fetch_price(querier: &QuerierWrapper, price_feed_addr: Addr) -> StdResult<Decimal256> {
+    let price: price_feed::GetPriceResponse =
+        querier.query_wasm_smart(price_feed_addr, &price_feed::QueryMsg::GetPrice {})?;
+    Ok(price.price)
+}
+
+pub fn query_borrowing_fee(
+    querier: &QuerierWrapper,
+    trove_manager_addr: Addr,
+    stable_debt: Uint256,
+) -> StdResult<Uint256> {
+    let trove_manager::GetBorrowingFeeResponse { fee } = querier.query_wasm_smart(
+        trove_manager_addr,
+        &trove_manager::QueryMsg::GetBorrowingFee {
+            ultra_debt: stable_debt,
+        },
+    )?;
+    Ok(fee)
+}
+
+// function _requireUserAcceptsFee(uint _fee, uint _amount, uint _maxFeePercentage) internal pure {
+//     uint feePercentage = _fee.mul(DECIMAL_PRECISION).div(_amount);
+//     require(feePercentage <= _maxFeePercentage, "Fee exceeded provided maximum");
+// }
+// liquity source: https://github.com/liquity/dev/blob/7e5c38eff92c7de7b366ec791fd86abc2012952c/packages/contracts/contracts/Dependencies/LiquityBase.sol#L89-L93
+pub fn require_user_accepts_fee(
+    _querier: &QuerierWrapper,
+    fee: Uint256,
+    amount: Uint256,
+    max_fee_percentage: Decimal256,
+) -> StdResult<()> {
+    let fee_with_precision = fee
+        .checked_mul(DECIMAL_PRECISION.into())
+        .map_err(StdError::overflow)?;
+    let fee_percentage = Decimal256::from_ratio(fee_with_precision, amount);
+
+    if fee_percentage > max_fee_percentage {
+        return Err(StdError::generic_err("Fee exceeded provided maximum"));
+    }
+
+    Ok(())
+}
+
+// function _requireAtLeastMinNetDebt(uint _netDebt) internal pure {
+//     require (_netDebt >= MIN_NET_DEBT, "BorrowerOps: Trove's net debt must be greater than minimum");
+// }
+// liquity source: https://github.com/liquity/dev/blob/e76b000e9558640e9479b8080786a9fbc47ed570/packages/contracts/contracts/BorrowerOperations.sol#L551-L553
+pub fn require_at_least_min_net_debt(net_debt: Uint256) -> StdResult<()> {
+    if net_debt < MIN_NET_DEBT.into() {
+        return Err(StdError::generic_err(
+            "BorrowerOps: Trove's net debt must be greater than minimum",
+        ));
+    }
+
+    Ok(())
 }
