@@ -1,0 +1,36 @@
+[package]
+name = "omosis-oracle"
+version = "0.1.0"
+authors = ["phamminh0811 <1phamminh0811@gmail.com>"]
+edition = "2021"
+
+exclude = [
+  # Those files are rust-optimizer artifacts. You might want to commit them for convenience but they should not be part of the source code publication.
+  "contract.wasm",
+  "hash.txt",
+]
+
+description = "JunoSwap Oracle"
+repository = "https://github.com/notional-labs/UltraStableJuno"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# for more explicit tests, cargo test --features=backtraces
+backtraces = ["cosmwasm-std/backtraces"]
+# use library feature to disable all instantiate/execute/query exports
+library = []
+
+[dependencies]
+cosmwasm-schema = "1.1.3"
+cosmwasm-std = {version = "1.1.3", features = [ "ibc3"] }
+cosmwasm-storage = "1.1.3"
+cw-storage-plus = "0.15.1"
+cw2 = "0.15.1"
+schemars = "0.8.10"
+serde = { version = "1.0.145", default-features = false, features = ["derive"] }
+thiserror = { version = "1.0.31" }
+getrandom = { version = "0.2", features = ["custom"] }
+[dev-dependencies]
+cw-multi-test = "0.15.1"
