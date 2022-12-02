@@ -1,5 +1,5 @@
 use crate::active_pool::QueryMsg as ActivePoolQueryMsg;
-use crate::asset::{AssetInfo, PoolInfo};
+use crate::asset::AssetInfo;
 use crate::default_pool::QueryMsg as DefaultPoolQueryMsg;
 use crate::ultra_math;
 
@@ -7,9 +7,8 @@ use cosmwasm_std::{
     Addr, AllBalanceResponse, BankQuery, Coin, Decimal256, QuerierWrapper, QueryRequest, StdError,
     StdResult, Uint128, Uint256,
 };
-use wasmswap::msg::{InfoResponse, QueryMsg as WasmSwapMsg};
 
-use cw20::{BalanceResponse as Cw20BalanceResponse, Cw20QueryMsg, Denom, TokenInfoResponse};
+use cw20::{BalanceResponse as Cw20BalanceResponse, Cw20QueryMsg, TokenInfoResponse};
 
 const NATIVE_TOKEN_PRECISION: u8 = 6;
 
@@ -100,32 +99,6 @@ pub fn query_token_precision(querier: &QuerierWrapper, asset_info: &AssetInfo) -
     };
 
     Ok(decimals)
-}
-
-/// Returns JunoSwap pool information.
-pub fn query_pool_info(querier: &QuerierWrapper, pool_contract_addr: Addr) -> StdResult<PoolInfo> {
-    let pool_info: InfoResponse =
-        querier.query_wasm_smart(pool_contract_addr, &WasmSwapMsg::Info {})?;
-
-    let token1_denom: AssetInfo = match pool_info.token1_denom {
-        Denom::Native(denom) => AssetInfo::NativeToken { denom },
-        Denom::Cw20(contract_addr) => AssetInfo::Cw20Token { contract_addr },
-    };
-
-    let token2_denom: AssetInfo = match pool_info.token2_denom {
-        Denom::Native(denom) => AssetInfo::NativeToken { denom },
-        Denom::Cw20(contract_addr) => AssetInfo::Cw20Token { contract_addr },
-    };
-
-    let res = PoolInfo {
-        token1_reserve: pool_info.token1_reserve,
-        token1_denom,
-        token2_reserve: pool_info.token2_reserve,
-        token2_denom,
-        lp_token_address: pool_info.lp_token_address,
-        lp_token_supply: pool_info.lp_token_supply,
-    };
-    Ok(res)
 }
 
 pub fn query_entire_system_coll(
