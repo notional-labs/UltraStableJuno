@@ -115,6 +115,7 @@ name = "coll-surplus-pool"
 version = "0.1.0"
 dependencies = [
  "cosmwasm-std",
+ "cw-controllers",
  "cw-multi-test",
  "cw-storage-plus 0.13.4",
  "cw2 0.13.4",
@@ -536,6 +537,7 @@ name = "default-pool"
 version = "0.1.0"
 dependencies = [
  "cosmwasm-std",
+ "cw-controllers",
  "cw-storage-plus 0.13.4",
  "cw2 0.13.4",
  "schemars",

@@ -84,8 +84,8 @@ pub fn execute_update_role(
     ROLE_CONSUMER.add_role_provider(deps.storage, role_provider.clone())?;
 
     let res = Response::new()
-        .add_attribute("action", "decrease_ultra_debt")
-        .add_attribute("update_role", role_provider);
+        .add_attribute("action", "update_role")
+        .add_attribute("role_provider_addr", role_provider);
     Ok(res)
 }
 
