@@ -1,5 +1,6 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::slice::Iter;
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -36,6 +37,16 @@ impl ToString for Role {
     }
 }
 
+impl Role {
+    pub fn iterator() -> Iter<'static, Role> {
+        static ROLES: [Role; 11] = [Role::ActivePool , Role::TroveManager, Role::Owner, 
+            Role::StabilityPool, Role::BorrowerOperations, Role::DefaultPool, 
+            Role::CollateralSurplusPool, Role::UltraToken, Role::PriceFeed,
+            Role::SortedTroves, Role::RewardPool];
+        ROLES.iter()
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct InstantiateMsg {
@@ -57,6 +68,7 @@ pub enum ExecuteMsg {
 pub enum QueryMsg<Role> {
     HasAnyRole { address: String, roles: Vec<Role> },
     RoleAddress { role: Role },
+    AllRoles {}
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -69,6 +81,12 @@ pub struct HasAnyRoleResponse {
 #[serde(rename_all = "snake_case")]
 pub struct RoleAddressResponse {
     pub address: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct AllRolesResponse {
+    pub roles: Vec<(Role, Option<String>)>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

@@ -11,6 +11,8 @@ pub struct InstantiateMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
+    UpdateAdmin { admin : Addr }, 
+    UpdateRole { role_provider: Addr },
     DecreaseULTRADebt { amount: Uint128 },
     IncreaseULTRADebt { amount: Uint128 },
     SendJUNO { recipient: Addr, amount: Uint128 },

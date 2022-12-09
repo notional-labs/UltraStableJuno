@@ -4,7 +4,7 @@ use cosmwasm_std::{
     to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
 };
 use cw2::set_contract_version;
-use ultra_base::role_provider::{HasAnyRoleResponse, Role, RoleAddressResponse};
+use ultra_base::role_provider::{HasAnyRoleResponse, Role, RoleAddressResponse, AllRolesResponse};
 
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
@@ -61,6 +61,16 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg<Role>) -> StdResult<Binary> {
             to_binary(&HasAnyRoleResponse { has_role })
         }
         QueryMsg::RoleAddress { role } => to_binary(&query_role_address(deps, role)?),
+        QueryMsg::AllRoles {  } => {
+            let mut roles : Vec<(Role, Option<String>)> = vec![];
+            for role in Role::iterator(){
+                let role_address = state.role_provider
+                    .get(deps.storage, &role)?
+                    .map(String::from);
+                roles.push((role.clone(), role_address));
+            }
+            to_binary(&AllRolesResponse { roles })
+        }
     }
 }
 
@@ -118,13 +128,13 @@ pub fn query_role_address(deps: Deps, role: Role) -> StdResult<RoleAddressRespon
 mod tests {
     use cosmwasm_std::{
         testing::{mock_dependencies, mock_info},
-        Addr, Empty,
+        Addr,
     };
     use ultra_base::role_provider::Role;
     use ultra_controllers::roles::{RoleProvider, RolesError};
 
     use crate::{
-        contract::{execute, execute_update_role, query, query_role_address},
+        contract::{execute_update_role, query_role_address},
         ContractError,
     };
 
