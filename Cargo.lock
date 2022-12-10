@@ -6,23 +6,26 @@ version = 3
 name = "active-pool"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "cosmwasm-std",
  "cw-controllers",
  "cw-multi-test",
  "cw-storage-plus 0.13.4",
+ "cw-utils 1.0.0",
  "cw2 0.13.4",
  "schemars",
  "serde",
  "thiserror",
  "ultra-base",
  "ultra-controllers",
+ "ultra-role-provider",
 ]
 
 [[package]]
 name = "anyhow"
-version = "1.0.57"
+version = "1.0.66"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08f9b8508dccb7687a1d6c4ce66b2b0ecef467c94667de27d8d7fe1f8d2a9cdc"
+checksum = "216261ddc8289130e551ddcd5ce8a064710c0d064a4d2895c67151c92b5443f6"
 
 [[package]]
 name = "bandoracle"
@@ -118,6 +121,7 @@ dependencies = [
  "cw-controllers",
  "cw-multi-test",
  "cw-storage-plus 0.13.4",
+ "cw-utils 1.0.0",
  "cw2 0.13.4",
  "schemars",
  "serde",
@@ -408,6 +412,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "cw-utils"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b50d0cac456f98b4339b78e890fbe60e4dfe888c87abacc1129fc3fe34bbe20a"
+dependencies = [
+ "anyhow",
+ "cosmwasm-schema 1.1.9",
+ "cosmwasm-std",
+ "cw2 0.16.0",
+ "k256",
+ "schemars",
+ "semver",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
 name = "cw0"
 version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -539,6 +560,7 @@ dependencies = [
  "cosmwasm-std",
  "cw-controllers",
  "cw-storage-plus 0.13.4",
+ "cw-utils 1.0.0",
  "cw2 0.13.4",
  "schemars",
  "serde",

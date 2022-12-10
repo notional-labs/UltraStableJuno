@@ -127,29 +127,47 @@ pub fn query_role_address(deps: Deps, role: Role) -> StdResult<RoleAddressRespon
 #[cfg(test)]
 mod tests {
     use cosmwasm_std::{
-        testing::{mock_dependencies, mock_info},
-        Addr,
+        testing::{mock_dependencies, mock_info, mock_env},
+        Addr, DepsMut,
     };
-    use ultra_base::role_provider::Role;
-    use ultra_controllers::roles::{RoleProvider, RolesError};
+    use ultra_base::{role_provider::{Role, InstantiateMsg}};
+    use ultra_controllers::roles::RolesError;
 
     use crate::{
-        contract::{execute_update_role, query_role_address},
+        contract::{execute_update_role, query_role_address, instantiate},
         ContractError,
     };
+
+    fn setup_contract(deps: DepsMut) {
+        let owner = Addr::unchecked("big boss");
+        let active_pool = Addr::unchecked("active pool");
+        let trove_manager = Addr::unchecked("trove manager");
+        let stability_pool = Addr::unchecked("stability pool");
+        let borrower_operations = Addr::unchecked("borrower operations");
+
+        let msg = InstantiateMsg {
+            active_pool: active_pool.to_string(),
+            trove_manager: trove_manager.to_string(),
+            owner: owner.to_string(),
+            stability_pool: stability_pool.to_string(),
+            borrower_operations: borrower_operations.to_string()
+        };
+
+        let info = mock_info(owner.as_str(), &[]);
+        let res = instantiate(deps, mock_env(), info, msg).unwrap();
+        assert_eq!(0, res.messages.len());
+    }
 
     #[test]
     fn test_execute_query() {
         let mut deps = mock_dependencies();
 
         // initial setup
-        let control = RoleProvider::new("foo", "foo__idx");
         let owner = Addr::unchecked("big boss");
         let imposter = Addr::unchecked("imposter");
         let friend = Addr::unchecked("buddy");
-        control
-            .set(deps.as_mut().storage, &Role::Owner, owner.clone())
-            .unwrap();
+        
+        setup_contract(deps.as_mut());
 
         // query shows results
         let res = query_role_address(deps.as_ref(), Role::Owner).unwrap();

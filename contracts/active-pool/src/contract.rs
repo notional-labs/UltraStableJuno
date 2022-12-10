@@ -7,6 +7,7 @@ use cosmwasm_std::{
     StdResult, Storage, Uint128,
 };
 use cw2::set_contract_version;
+use cw_utils::maybe_addr;
 use ultra_base::role_provider::Role;
 use ultra_base::active_pool::{ExecuteMsg, InstantiateMsg, ParamsResponse, QueryMsg};
 
@@ -23,12 +24,13 @@ pub const NATIVE_JUNO_DENOM: &str = "ujuno";
 pub fn instantiate(
     mut deps: DepsMut,
     _env: Env,
-    info: MessageInfo,
+    _info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
     // set admin so that only admin can access to update role function
-    ADMIN.set(deps.branch(), Some(info.sender))?;
+    let api = deps.api;
+    ADMIN.set(deps.branch(), maybe_addr(api, Some(msg.owner.clone()))?)?;
 
     // store sudo params
     let sudo_params = SudoParams {
