@@ -16,55 +16,55 @@ pub enum ExecuteMsg {
     Liquidate {
         borrower: String,
     },
-    // Liquidate a sequence of troves. Closes a maximum number of n under-collateralized Troves,
-    // starting from the one with the lowest collateral ratio in the system, and moving upwards
-    LiquidateTroves {
-        n: Uint128,
-    },
-    // Attempt to liquidate a custom list of troves provided by the caller.
-    BatchLiquidateTroves {},
-    // Send ultra_amount $ULTRA to the system and redeem the corresponding amount of collateral from as many Troves
-    // as are needed to fill the redemption request.
-    RedeemCollateral {
-        ultra_amount: Uint128,
-        first_redemption_hint: String,
-        upper_partial_redemption_hint: String,
-        lower_partial_redemption_hint: String,
-        max_iterations: Uint128,
-        max_fee_percentage: Uint128,
-    },
-    // Add the borrowers's coll and debt rewards earned from redistributions, to their Trove
-    ApplyPendingRewards {
-        borrower: String,
-    },
-    // Update borrower's snapshots of L_JUNO and L_ULTRADebt to reflect the current values
-    UpdateTroveRewardSnapshots {
-        borrower: String,
-    },
-    // Remove borrower's stake from the totalStakes sum, and set their stake to 0
-    RemoveStake {
-        borrower: String,
-    },
-    // Update borrower's stake based on their latest collateral value
-    UpdateStakeAndTotalStakes {
-        borrower: String,
-    },
-    // Close a Trove
-    CloseTrove {
-        borrower: String,
-    },
-    // Push the owner's address to the Trove owners list, and record the corresponding array index on the Trove struct
-    AddTroveOwnerToArray {
-        borrower: String,
-    },
+    // // Liquidate a sequence of troves. Closes a maximum number of n under-collateralized Troves,
+    // // starting from the one with the lowest collateral ratio in the system, and moving upwards
+    // LiquidateTroves {
+    //     n: Uint128,
+    // },
+    // // Attempt to liquidate a custom list of troves provided by the caller.
+    // BatchLiquidateTroves {},
+    // // Send ultra_amount $ULTRA to the system and redeem the corresponding amount of collateral from as many Troves
+    // // as are needed to fill the redemption request.
+    // RedeemCollateral {
+    //     ultra_amount: Uint128,
+    //     first_redemption_hint: String,
+    //     upper_partial_redemption_hint: String,
+    //     lower_partial_redemption_hint: String,
+    //     max_iterations: Uint128,
+    //     max_fee_percentage: Uint128,
+    // },
+    // // Add the borrowers's coll and debt rewards earned from redistributions, to their Trove
+    // ApplyPendingRewards {
+    //     borrower: String,
+    // },
+    // // Update borrower's snapshots of L_JUNO and L_ULTRADebt to reflect the current values
+    // UpdateTroveRewardSnapshots {
+    //     borrower: String,
+    // },
+    // // Remove borrower's stake from the totalStakes sum, and set their stake to 0
+    // RemoveStake {
+    //     borrower: String,
+    // },
+    // // Update borrower's stake based on their latest collateral value
+    // UpdateStakeAndTotalStakes {
+    //     borrower: String,
+    // },
+    // // Close a Trove
+    // CloseTrove {
+    //     borrower: String,
+    // },
+    // // Push the owner's address to the Trove owners list, and record the corresponding array index on the Trove struct
+    // AddTroveOwnerToArray {
+    //     borrower: String,
+    // },
 
-    /// --- Borrowing fee functions ---
-    DecayBaseRateFromBorrowing {},
+    // /// --- Borrowing fee functions ---
+    // DecayBaseRateFromBorrowing {},
 
     /// --- Trove property setters, called by BorrowerOperations ---
     SetTroveStatus {
         borrower: String,
-        num: Uint128,
+        status: Status,
     },
     IncreaseTroveColl {
         borrower: String,
@@ -130,4 +130,11 @@ pub enum SudoMsg {
 pub struct ParamsResponse {
     pub name: String,
     pub owner: Addr,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub enum Status{
+    NonExistent,
+    Active,
+    Closed
 }
