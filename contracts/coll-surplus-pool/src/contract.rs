@@ -8,13 +8,14 @@ use cosmwasm_std::{
 };
 
 use cw2::set_contract_version;
+use cw_utils::maybe_addr;
 use ultra_base::role_provider::Role;
+use ultra_base::coll_surplus_pool::{ExecuteMsg, InstantiateMsg, ParamsResponse, QueryMsg};
 
 use crate::error::ContractError;
 use crate::state::{
-    State, SudoParams, TotalCollsInPool, COLL_OF_ACCOUNT, SUDO_PARAMS, TOTAL_COLLS_IN_POOL,
+    SudoParams, TotalCollsInPool, COLL_OF_ACCOUNT, SUDO_PARAMS, TOTAL_COLLS_IN_POOL, ADMIN, ROLE_CONSUMER,
 };
-use ultra_base::coll_surplus_pool::{ExecuteMsg, InstantiateMsg, ParamsResponse, QueryMsg};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:active-pool";
@@ -24,13 +25,15 @@ pub const NATIVE_JUNO_DENOM: &str = "ujuno";
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
-    deps: DepsMut,
+    mut deps: DepsMut,
     _env: Env,
     _info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-
+    // set admin so that only admin can access to update role function
+    let api = deps.api;
+    ADMIN.set(deps.branch(), maybe_addr(api, Some(msg.owner.clone()))?)?;
     // store sudo params
     let sudo_params = SudoParams {
         name: msg.name,
@@ -56,11 +59,32 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
+        ExecuteMsg::UpdateAdmin { admin } => {
+            Ok(ADMIN.execute_update_admin(deps, info, Some(admin))?)
+        }
+        ExecuteMsg::UpdateRole { role_provider } => {
+            execute_update_role(deps, env, info, role_provider)
+        }
         ExecuteMsg::AccountSurplus { account, amount } => {
             execute_account_surplus(deps, env, info, account, amount)
         }
         ExecuteMsg::ClaimColl { account } => execute_claim_coll(deps, env, info, account),
     }
+}
+
+pub fn execute_update_role(
+    deps: DepsMut, 
+    _env: Env,
+    info: MessageInfo,
+    role_provider: Addr
+) -> Result<Response, ContractError> {
+    ADMIN.assert_admin(deps.as_ref(), &info.sender)?;
+    ROLE_CONSUMER.add_role_provider(deps.storage, role_provider.clone())?;
+
+    let res = Response::new()
+        .add_attribute("action", "update_role")
+        .add_attribute("role_provider_addr", role_provider);
+    Ok(res)
 }
 
 pub fn execute_account_surplus(
@@ -70,9 +94,7 @@ pub fn execute_account_surplus(
     account: Addr,
     amount: Uint128,
 ) -> Result<Response, ContractError> {
-    let state = State::default();
-    state
-        .roles
+    ROLE_CONSUMER
         .assert_role(deps.as_ref(), &info.sender, vec![Role::TroveManager])?;
 
     let mut coll_of_account = COLL_OF_ACCOUNT.load(deps.storage, account.clone())?;
@@ -91,9 +113,7 @@ pub fn execute_claim_coll(
     info: MessageInfo,
     account: Addr,
 ) -> Result<Response, ContractError> {
-    let state = State::default();
-    state
-        .roles
+    ROLE_CONSUMER
         .assert_role(deps.as_ref(), &info.sender, vec![Role::BorrowerOperations])?;
 
     let mut coll_of_account = COLL_OF_ACCOUNT.load(deps.storage, account.clone())?;

@@ -16,6 +16,8 @@ pub enum RolesError {
 
     #[error("Caller is not {label}")]
     UnauthorizedForRole { label: String },
+
+
 }
 
 pub type RoleRecord = Addr;
@@ -35,10 +37,14 @@ type BaseRole = Role;
 pub struct RoleConsumer<'a, Role: ToString = BaseRole>(Item<'a, Addr>, PhantomData<Role>);
 
 impl<'a, Role: ToString + Serialize> RoleConsumer<'a, Role> {
-    pub fn new(role_provider_addr_namespace: &'a str) -> Self {
+    pub const fn new(role_provider_addr_namespace: &'a str) -> Self {
         RoleConsumer(Item::new(role_provider_addr_namespace), PhantomData)
     }
 
+    pub fn add_role_provider (&self, storage: &mut dyn Storage, role_provider_addr: Addr) -> Result<(), RolesError>{
+        Ok(self.0.save(storage, &role_provider_addr)?)
+    }
+    
     pub fn load_role_address(&self, deps: Deps, role: Role) -> Result<Addr, RolesError> {
         let role_provider_addr = self.0.load(deps.storage)?;
         let res: ultra_base::role_provider::RoleAddressResponse = deps.querier.query_wasm_smart(
