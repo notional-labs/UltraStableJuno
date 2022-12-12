@@ -1,11 +1,14 @@
 [package]
-name = "junoswap-oracle"
+name = "oracle-querier"
 version = "0.1.0"
-authors = ["Chinh D.Nguyen <eyescryptoinsights@gmail.com>"]
+authors = ["Ho Ba Nguyen <expertdicer@gmail.com>"]
 edition = "2021"
 
-description = "JunoSwap Oracle"
-repository = "https://github.com/notional-labs/UltraStableJuno"
+exclude = [
+  # Those files are rust-optimizer artifacts. You might want to commit them for convenience but they should not be part of the source code publication.
+  "contract.wasm",
+  "hash.txt",
+]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -16,10 +19,10 @@ backtraces = ["cosmwasm-std/backtraces"]
 library = []
 
 [dependencies]
-cw2 = { version = "0.13.4" }
+cw2 = { version = "0.16.0" }
 cosmwasm-std = { version = "1.0.0" }
-cw-storage-plus = { version = "0.13.4" }
 schemars = "0.8.1"
 serde = { version = "1.0.103", default-features = false, features = ["derive"] }
 thiserror = { version = "1.0.23" }
-ultra-base = { path = "../../packages/ultra-base", default-features = false }
+ultra-base = { path = "../../packages/ultra-base"}
+cw-storage-plus  = { version = "0.16.0" }
