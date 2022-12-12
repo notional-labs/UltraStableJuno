@@ -1,4 +1,7 @@
+use std::marker::PhantomData;
+
 use cosmwasm_std::{Addr, Uint128};
+use cw_storage_plus::{UniqueIndex, MultiIndex, IndexList, Index, IndexedMap};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -11,6 +14,14 @@ pub struct InstantiateMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
+    // Role Manager function
+    UpdateAdmin { 
+        admin : Addr 
+    }, 
+    UpdateRole { 
+        role_provider: Addr 
+    },
+
     ///--- Trove Liquidation functions ---
     // Single liquidation function. Closes the trove if its ICR is lower than the minimum collateral ratio.
     Liquidate {
@@ -53,13 +64,13 @@ pub enum ExecuteMsg {
     // CloseTrove {
     //     borrower: String,
     // },
-    // // Push the owner's address to the Trove owners list, and record the corresponding array index on the Trove struct
-    // AddTroveOwnerToArray {
-    //     borrower: String,
-    // },
+    // Push the owner's address to the Trove owners list, and record the corresponding array index on the Trove struct
+    AddTroveOwnerToArray {
+        borrower: String,
+    },
 
-    // /// --- Borrowing fee functions ---
-    // DecayBaseRateFromBorrowing {},
+    /// --- Borrowing fee functions ---
+    DecayBaseRateFromBorrowing {},
 
     /// --- Trove property setters, called by BorrowerOperations ---
     SetTroveStatus {
@@ -137,4 +148,51 @@ pub enum Status{
     NonExistent,
     Active,
     Closed
+}
+
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct Trove {
+    pub juno: Uint128,
+    pub ultra_debt: Uint128,
+    pub stake: Uint128,
+    pub status: Status,
+    pub owner: Addr
+}
+
+pub type TrovePK<'a> = &'a str;
+pub struct TrovesIndexes<'a> {
+    pub trove: UniqueIndex<'a, Addr, Trove>,
+    pub trove_owner: MultiIndex<'a, Addr, Trove, Uint128>
+}
+
+impl IndexList<Trove> for TrovesIndexes<'_> {
+    fn get_indexes(&'_ self) -> Box<dyn Iterator<Item = &'_ dyn Index<Trove>> + '_> {
+        let v: Vec<&dyn Index<Trove>> = vec![&self.trove, &self.trove_owner];
+        Box::new(v.into_iter())
+    }
+}
+
+pub struct Troves<'a> (
+    IndexedMap<'a, TrovePK<'a>, Trove, TrovesIndexes<'a>>,
+    PhantomData<Trove>,
+);
+
+impl<'a> Troves<'a>{
+    pub fn new(namespace: &'a str, troves_by_addr_idx_namespace: &'a str) -> Self{
+        Self(
+            IndexedMap::new(
+                namespace, 
+                TrovesIndexes{
+                    trove: UniqueIndex::new(|t| t.owner.clone(), troves_by_addr_idx_namespace),
+                    trove_owner: MultiIndex::new(
+                                |t| t.owner.clone(),
+                                namespace,
+                                troves_by_addr_idx_namespace,
+                            ),
+                }
+            ),
+            PhantomData
+        )
+    }
 }
