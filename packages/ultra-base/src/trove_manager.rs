@@ -82,17 +82,6 @@ pub enum ExecuteMsg {
         borrower: String,
         debt_decrease: Uint128,
     },
-
-    SetAddresses {
-        borrower_operations_address: String,
-        active_pool_address: String,
-        default_pool_address: String,
-        stability_pool_address: String,
-        coll_surplus_pool_address: String,
-        ultra_token_address: String,
-        sorted_troves_address: String,
-        price_feed_address: String,
-    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

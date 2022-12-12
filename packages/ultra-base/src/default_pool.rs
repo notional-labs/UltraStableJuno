@@ -11,19 +11,11 @@ pub struct InstantiateMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
-    DecreaseULTRADebt {
-        amount: Uint128,
-    },
-    IncreaseULTRADebt {
-        amount: Uint128,
-    },
-    SendJUNOToActivePool {
-        amount: Uint128,
-    },
-    SetAddresses {
-        trove_manager_address: String,
-        active_pool_address: String,
-    },
+    UpdateAdmin { admin : Addr }, 
+    UpdateRole { role_provider: Addr },
+    DecreaseULTRADebt { amount: Uint128 },
+    IncreaseULTRADebt { amount: Uint128 },
+    SendJUNOToActivePool { amount: Uint128 },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -32,8 +24,6 @@ pub enum QueryMsg {
     GetParams {},
     GetJUNO {},
     GetULTRADebt {},
-    GetActivePoolAddress {},
-    GetTroveManagerAddress {},
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

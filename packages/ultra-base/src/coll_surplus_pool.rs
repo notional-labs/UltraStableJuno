@@ -11,18 +11,10 @@ pub struct InstantiateMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
-    AccountSurplus {
-        account: Addr,
-        amount: Uint128,
-    },
-    ClaimColl {
-        account: Addr,
-    },
-    SetAddresses {
-        borrower_operations_address: String,
-        trove_manager_address: String,
-        active_pool_address: String,
-    },
+    UpdateAdmin { admin : Addr }, 
+    UpdateRole { role_provider: Addr },
+    AccountSurplus { account: Addr, amount: Uint128 },
+    ClaimColl { account: Addr },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -31,9 +23,6 @@ pub enum QueryMsg {
     GetParams {},
     GetJUNO {},
     GetCollateral { account: Addr },
-    GetBorrowerOperationsAddress {},
-    GetActivePoolAddress {},
-    GetTroveManagerAddress {},
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

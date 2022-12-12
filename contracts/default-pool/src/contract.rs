@@ -8,11 +8,11 @@ use cosmwasm_std::{
 };
 
 use cw2::set_contract_version;
+use cw_utils::maybe_addr;
+use ultra_base::role_provider::Role;
 
 use crate::error::ContractError;
-use crate::state::{
-    AddressesSet, AssetsInPool, SudoParams, ADDRESSES_SET, ASSETS_IN_POOL, SUDO_PARAMS,
-};
+use crate::state::{AssetsInPool, SudoParams, ASSETS_IN_POOL, SUDO_PARAMS, ADMIN, ROLE_CONSUMER};
 use ultra_base::default_pool::{ExecuteMsg, InstantiateMsg, ParamsResponse, QueryMsg};
 
 // version info for migration info
@@ -23,12 +23,15 @@ pub const NATIVE_JUNO_DENOM: &str = "ujuno";
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
-    deps: DepsMut,
+    mut deps: DepsMut,
     _env: Env,
     _info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+    // set admin so that only admin can access to update role function
+    let api = deps.api;
+    ADMIN.set(deps.branch(), maybe_addr(api, Some(msg.owner.clone()))?)?;
 
     // store sudo params
     let data = SudoParams {
@@ -56,6 +59,12 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
+        ExecuteMsg::UpdateAdmin { admin } => {
+            Ok(ADMIN.execute_update_admin(deps, info, Some(admin))?)
+        }
+        ExecuteMsg::UpdateRole { role_provider } => {
+            execute_update_role(deps, env, info, role_provider)
+        }
         ExecuteMsg::IncreaseULTRADebt { amount } => {
             execute_increase_ultra_debt(deps, env, info, amount)
         }
@@ -65,11 +74,22 @@ pub fn execute(
         ExecuteMsg::SendJUNOToActivePool { amount } => {
             execute_send_juno_to_active_pool(deps, env, info, amount)
         }
-        ExecuteMsg::SetAddresses {
-            trove_manager_address,
-            active_pool_address,
-        } => execute_set_addresses(deps, env, info, trove_manager_address, active_pool_address),
     }
+}
+
+pub fn execute_update_role(
+    deps: DepsMut, 
+    _env: Env,
+    info: MessageInfo,
+    role_provider: Addr
+) -> Result<Response, ContractError> {
+    ADMIN.assert_admin(deps.as_ref(), &info.sender)?;
+    ROLE_CONSUMER.add_role_provider(deps.storage, role_provider.clone())?;
+
+    let res = Response::new()
+        .add_attribute("action", "update_role")
+        .add_attribute("role_provider_addr", role_provider);
+    Ok(res)
 }
 
 pub fn execute_increase_ultra_debt(
@@ -78,7 +98,8 @@ pub fn execute_increase_ultra_debt(
     info: MessageInfo,
     amount: Uint128,
 ) -> Result<Response, ContractError> {
-    only_tm(deps.storage, &info)?;
+    ROLE_CONSUMER
+        .assert_role(deps.as_ref(), &info.sender, vec![Role::TroveManager])?;
 
     let mut assets_in_pool = ASSETS_IN_POOL.load(deps.storage)?;
     assets_in_pool.ultra_debt += amount;
@@ -95,7 +116,8 @@ pub fn execute_decrease_ultra_debt(
     info: MessageInfo,
     amount: Uint128,
 ) -> Result<Response, ContractError> {
-    only_tm(deps.storage, &info)?;
+    ROLE_CONSUMER
+        .assert_role(deps.as_ref(), &info.sender, vec![Role::TroveManager])?;
 
     let mut assets_in_pool = ASSETS_IN_POOL.load(deps.storage)?;
     assets_in_pool.ultra_debt = assets_in_pool
@@ -115,7 +137,8 @@ pub fn execute_send_juno_to_active_pool(
     info: MessageInfo,
     amount: Uint128,
 ) -> Result<Response, ContractError> {
-    only_tm(deps.storage, &info)?;
+    ROLE_CONSUMER
+        .assert_role(deps.as_ref(), &info.sender, vec![Role::TroveManager])?;
 
     let mut assets_in_pool = ASSETS_IN_POOL.load(deps.storage)?;
     assets_in_pool.juno = assets_in_pool
@@ -124,8 +147,9 @@ pub fn execute_send_juno_to_active_pool(
         .map_err(StdError::overflow)?;
     ASSETS_IN_POOL.save(deps.storage, &assets_in_pool)?;
 
-    let addresses_set = ADDRESSES_SET.load(deps.storage)?;
-    let active_pool_address = addresses_set.active_pool_address;
+    let active_pool_address = ROLE_CONSUMER
+        .load_role_address(deps.as_ref(), Role::ActivePool)?;
+
     let send_msg = BankMsg::Send {
         to_address: active_pool_address.to_string(),
         amount: vec![coin(amount.u128(), NATIVE_JUNO_DENOM.to_string())],
@@ -138,44 +162,6 @@ pub fn execute_send_juno_to_active_pool(
     Ok(res)
 }
 
-pub fn execute_set_addresses(
-    deps: DepsMut,
-    _env: Env,
-    info: MessageInfo,
-    trove_manager_address: String,
-    active_pool_address: String,
-) -> Result<Response, ContractError> {
-    only_owner(deps.storage, &info)?;
-
-    let new_addresses_set = AddressesSet {
-        trove_manager_address: deps.api.addr_validate(&trove_manager_address)?,
-        active_pool_address: deps.api.addr_validate(&active_pool_address)?,
-    };
-
-    ADDRESSES_SET.save(deps.storage, &new_addresses_set)?;
-    let res = Response::new()
-        .add_attribute("action", "set_addresses")
-        .add_attribute("trove_manager_address", trove_manager_address)
-        .add_attribute("active_pool_address", active_pool_address);
-    Ok(res)
-}
-
-/// Checks to enfore only active pool can call
-fn only_ap(store: &dyn Storage, info: &MessageInfo) -> Result<Addr, ContractError> {
-    let addresses_set = ADDRESSES_SET.load(store)?;
-    if addresses_set.active_pool_address != info.sender.as_ref() {
-        return Err(ContractError::CallerIsNotAP {});
-    }
-    Ok(info.sender.clone())
-}
-/// Checks to enfore only trove manager can call
-fn only_tm(store: &dyn Storage, info: &MessageInfo) -> Result<Addr, ContractError> {
-    let addresses_set = ADDRESSES_SET.load(store)?;
-    if addresses_set.trove_manager_address != info.sender.as_ref() {
-        return Err(ContractError::CallerIsNotTM {});
-    }
-    Ok(info.sender.clone())
-}
 /// Checks to enfore only owner can call
 fn only_owner(store: &dyn Storage, info: &MessageInfo) -> Result<Addr, ContractError> {
     let params = SUDO_PARAMS.load(store)?;
@@ -191,8 +177,6 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::GetParams {} => to_binary(&query_params(deps)?),
         QueryMsg::GetJUNO {} => to_binary(&query_juno_state(deps)?),
         QueryMsg::GetULTRADebt {} => to_binary(&query_ultra_debt_state(deps)?),
-        QueryMsg::GetActivePoolAddress {} => to_binary(&query_active_pool_address(deps)?),
-        QueryMsg::GetTroveManagerAddress {} => to_binary(&query_trove_manager_address(deps)?),
     }
 }
 
@@ -215,16 +199,4 @@ pub fn query_params(deps: Deps) -> StdResult<ParamsResponse> {
         owner: info.owner,
     };
     Ok(res)
-}
-
-pub fn query_active_pool_address(deps: Deps) -> StdResult<Addr> {
-    let addresses_set = ADDRESSES_SET.load(deps.storage)?;
-    let active_pool_address = addresses_set.active_pool_address;
-    Ok(active_pool_address)
-}
-
-pub fn query_trove_manager_address(deps: Deps) -> StdResult<Addr> {
-    let addresses_set = ADDRESSES_SET.load(deps.storage)?;
-    let trove_manager_address = addresses_set.trove_manager_address;
-    Ok(trove_manager_address)
 }
