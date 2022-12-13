@@ -3,6 +3,7 @@ use cw_controllers::Admin;
 use cw_storage_plus::Item;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use ultra_base::trove_manager::Troves;
 use ultra_controllers::roles::RoleConsumer;
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
@@ -18,7 +19,19 @@ pub struct SudoParams {
     pub owner: Addr,
 }
 
+pub struct State<'a> {
+    pub troves: Troves<'a>,
+    pub manager: Item<'a, Manager>
+}
+
+impl<'a> Default for State<'a> {
+    fn default() -> Self {
+        State {
+            troves: Troves::new("troves", "troves__troves_by_addr"),
+            manager: Item::new("manager")
+        }
+    }
+}
 pub const SUDO_PARAMS: Item<SudoParams> = Item::new("sudo-params");
-pub const MANAGER: Item<Manager> = Item::new("manager");
 pub const ADMIN: Admin = Admin::new("admin");
 pub const ROLE_CONSUMER : RoleConsumer = RoleConsumer::new("role_provider");

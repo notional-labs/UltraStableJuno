@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use cosmwasm_std::{Addr, Uint128};
+use cosmwasm_std::{Addr, Uint128, Storage, StdResult};
 use cw_storage_plus::{UniqueIndex, MultiIndex, IndexList, Index, IndexedMap};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -162,13 +162,12 @@ pub struct Trove {
 
 pub type TrovePK<'a> = &'a str;
 pub struct TrovesIndexes<'a> {
-    pub trove: UniqueIndex<'a, Addr, Trove>,
     pub trove_owner: MultiIndex<'a, Addr, Trove, Uint128>
 }
 
 impl IndexList<Trove> for TrovesIndexes<'_> {
     fn get_indexes(&'_ self) -> Box<dyn Iterator<Item = &'_ dyn Index<Trove>> + '_> {
-        let v: Vec<&dyn Index<Trove>> = vec![&self.trove, &self.trove_owner];
+        let v: Vec<&dyn Index<Trove>> = vec![&self.trove_owner];
         Box::new(v.into_iter())
     }
 }
@@ -180,11 +179,10 @@ pub struct Troves<'a> (
 
 impl<'a> Troves<'a>{
     pub fn new(namespace: &'a str, troves_by_addr_idx_namespace: &'a str) -> Self{
-        Self(
+        Troves(
             IndexedMap::new(
                 namespace, 
                 TrovesIndexes{
-                    trove: UniqueIndex::new(|t| t.owner.clone(), troves_by_addr_idx_namespace),
                     trove_owner: MultiIndex::new(
                                 |t| t.owner.clone(),
                                 namespace,
@@ -194,5 +192,17 @@ impl<'a> Troves<'a>{
             ),
             PhantomData
         )
+    }
+
+    pub fn delete(&self, store: &mut dyn Storage, trove: &Trove) -> StdResult<()> {
+        self.0.remove(store, &trove.to_string())
+    }
+
+    pub fn set(&self, store: &mut dyn Storage, role: &Role, grantee: Addr) -> StdResult<()> {
+        self.0.save(store, &role.to_string(), &grantee)
+    }
+
+    pub fn get(&self, store: &dyn Storage, role: &Role) -> StdResult<Option<RoleRecord>> {
+        self.0.may_load(store, &role.to_string())
     }
 }
