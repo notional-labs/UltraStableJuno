@@ -153,7 +153,7 @@ pub fn check_recovery_mode(
     price: Decimal256,
     active_pool_addr: Addr,
     default_pool_addr: Addr,
-) -> bool {
-    let tcr = get_tcr(querier, price, active_pool_addr, default_pool_addr).unwrap();
-    tcr < CCR
+) -> StdResult<bool> {
+    let tcr = get_tcr(querier, price, active_pool_addr, default_pool_addr)?;
+    Ok(tcr < CCR)
 }

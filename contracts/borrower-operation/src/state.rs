@@ -1,4 +1,4 @@
-use cosmwasm_std::{Addr, Decimal256, Uint128};
+use cosmwasm_std::{Addr, Decimal256, Uint128, CanonicalAddr};
 use cw_storage_plus::Item;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -34,3 +34,18 @@ impl<'a> Default for State<'a> {
 }
 
 pub const SUDO_PARAMS: Item<SudoParams> = Item::new("sudo-params");
+pub const CONFIG: Item<Config> = Item::new("config");
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct Config {
+    pub trove_manager: CanonicalAddr,
+    pub active_pool: CanonicalAddr,
+    pub default_pool: CanonicalAddr,
+    pub stability_pool: CanonicalAddr,
+    pub gas_pool: CanonicalAddr,
+    pub coll_surplus_pool: CanonicalAddr,
+    pub price_feed: CanonicalAddr,
+    pub sorted_troves: CanonicalAddr,
+    pub ultra: CanonicalAddr,
+    pub lqty_staking: CanonicalAddr,
+}

@@ -11,3 +11,4 @@ pub mod stability_pool;
 pub mod trove_manager;
 pub mod ultra_math;
 pub mod role_provider;
+pub mod ultra_token;

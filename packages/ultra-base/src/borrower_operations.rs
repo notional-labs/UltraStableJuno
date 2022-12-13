@@ -6,6 +6,16 @@ use serde::{Deserialize, Serialize};
 pub struct InstantiateMsg {
     pub name: String,
     pub owner: String,
+    pub trove_manager: String,
+    pub active_pool: String,
+    pub default_pool: String,
+    pub stability_pool: String,
+    pub gas_pool: String,
+    pub coll_surplus_pool: String,
+    pub price_feed: String,
+    pub sorted_troves: String,
+    pub ultra: String,
+    pub lqty_staking: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
