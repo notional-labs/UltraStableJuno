@@ -3,7 +3,7 @@ use std::str::FromStr;
 
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{DepsMut, Env, MessageInfo, Response, Storage, Addr, Uint128, StdError, Decimal256};
+use cosmwasm_std::{DepsMut, Env, MessageInfo, Response, Storage, Addr, Uint128, StdError, Decimal256, Uint256};
 
 use cw2::set_contract_version;
 use cw_utils::maybe_addr;
@@ -141,8 +141,18 @@ pub fn execute_close_trove(
     let state = State::default();
     let trove_count = state.manager.load(deps.storage)?.trove_owner_count;
 
-    // TODO: assert sorted troves size > 1
-    if trove_count <= Uint128::from(1u128) {
+    let sorted_troves = ROLE_CONSUMER
+        .load_role_address(
+            deps.as_ref(), 
+            Role::SortedTroves
+    )?;
+    let size: Uint256 = deps
+        .querier
+        .query_wasm_smart(
+            sorted_troves, 
+            &ultra_base::sorted_troves::QueryMsg::GetSize {  })?;
+        
+    if trove_count <= Uint128::from(1u128) && size <= Uint256::from_u128(1u128) {
         return Err(ContractError::OnlyOneTroveExist {});
     }
 
