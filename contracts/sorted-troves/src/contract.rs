@@ -1,11 +1,11 @@
 
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{DepsMut, Env, MessageInfo, Response, Addr,Uint256};
+use cosmwasm_std::{DepsMut, Env, MessageInfo, Response, Addr,Uint256, Deps, Binary, StdResult, to_binary};
 
 use cw2::set_contract_version;
 use cw_utils::maybe_addr;
-use ultra_base::role_provider::Role;
+use ultra_base::{role_provider::Role, sorted_troves::ParamsResponse};
 
 use crate::{state::{SudoParams, SUDO_PARAMS, ADMIN, ROLE_CONSUMER, NODES, DATA, Data, Node}, ContractError, helpers::{validate_insert_position, find_insert_position}};
 use ultra_base::sorted_troves::{InstantiateMsg, ExecuteMsg, QueryMsg};
@@ -357,3 +357,100 @@ pub fn execute_set_params(
     Ok(res)
 }
 
+
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn query(
+    deps: Deps,
+    _env: Env,
+    _info: MessageInfo,
+    msg: QueryMsg
+) -> StdResult<Binary> {
+    match msg {
+        QueryMsg::GetParams {  } => to_binary(&query_params(deps)?),
+        QueryMsg::GetData {  } => to_binary(&query_data(deps)?),
+        QueryMsg::GetSize {  } => to_binary(&query_size(deps)?),
+        QueryMsg::GetMaxSize {  } => to_binary(&query_max_size(deps)?),
+        QueryMsg::GetFirst {  } => to_binary(&query_first(deps)?),
+        QueryMsg::GetLast {  } => to_binary(&query_last(deps)?),
+        QueryMsg::GetNext { id } => to_binary(&query_next(deps, id)?),
+        QueryMsg::GetPrev { id } => to_binary(&query_prev(deps, id)?),
+        QueryMsg::FindInsertPosition { nicr, prev_id, next_id } => {
+            let prev_id = maybe_addr(deps.api, Some(prev_id))?;
+            let next_id = maybe_addr(deps.api, Some(next_id))?;
+            to_binary(&find_insert_position(deps, nicr, prev_id, next_id)?)
+        },
+        QueryMsg::ValidInsertPosition { nicr, prev_id, next_id } => {
+            let prev_id = maybe_addr(deps.api, Some(prev_id))?;
+            let next_id = maybe_addr(deps.api, Some(next_id))?;
+            to_binary(&validate_insert_position(deps, nicr, prev_id, next_id)?)
+        },
+        QueryMsg::IsEmpty {  } => to_binary(&query_is_empty(deps)?),
+        QueryMsg::IsFull {  } => to_binary(&query_is_full(deps)?),
+        QueryMsg::GetBorrowerOperationAddress {  } => to_binary(&ROLE_CONSUMER.load_role_address(deps, Role::BorrowerOperations)?),
+        QueryMsg::GetTroveManagerAddress {  } => to_binary(&ROLE_CONSUMER.load_role_address(deps, Role::TroveManager)?)
+    }
+}
+
+pub fn query_params(deps: Deps) -> StdResult<ParamsResponse> {
+    let info = SUDO_PARAMS.load(deps.storage)?;
+    let res = ParamsResponse {
+        name: info.name,
+        owner: info.owner,
+    };
+    Ok(res)
+}
+
+pub fn query_data(deps: Deps) -> StdResult<Data> {
+    let data = DATA.load(deps.storage)?;
+    Ok(data)
+}
+
+pub fn query_size(deps: Deps) -> StdResult<Uint256> {
+    let data = DATA.load(deps.storage)?;
+    Ok(data.size)
+}
+
+pub fn query_max_size(deps: Deps) -> StdResult<Uint256> {
+    let data = DATA.load(deps.storage)?;
+    Ok(data.max_size)
+}
+
+pub fn query_first(deps: Deps) -> StdResult<Option<Addr>> {
+    let data = DATA.load(deps.storage)?;
+    Ok(data.head)
+}
+
+pub fn query_last(deps: Deps) -> StdResult<Option<Addr>> {
+    let data = DATA.load(deps.storage)?;
+    Ok(data.tail)
+}
+
+pub fn query_next(deps: Deps, id: String) -> StdResult<Option<Addr>> {
+    let id_addr = deps.api.addr_validate(&id)?;
+    let node = NODES.may_load(deps.storage, id_addr)?;
+    if node.is_none() {
+        Ok(None)
+    } else {
+        Ok(node.unwrap().next_id)        
+    }
+}
+
+pub fn query_prev(deps: Deps, id: String) -> StdResult<Option<Addr>> {
+    let id_addr = deps.api.addr_validate(&id)?;
+    let node = NODES.may_load(deps.storage, id_addr)?;
+    if node.is_none() {
+        Ok(None)
+    } else {
+        Ok(node.unwrap().prev_id)        
+    }
+}
+
+pub fn query_is_empty(deps: Deps) -> StdResult<bool> {
+    let data = DATA.load(deps.storage)?;
+    Ok(data.size.is_zero())
+}
+
+pub fn query_is_full(deps: Deps) -> StdResult<bool> {
+    let data = DATA.load(deps.storage)?;
+    Ok(data.size == data.max_size)
+}

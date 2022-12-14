@@ -1,4 +1,4 @@
-use cosmwasm_std::{Deps, Addr, Uint256};
+use cosmwasm_std::{Deps, Addr, Uint256, StdResult, StdError};
 use ultra_base::role_provider::Role;
 
 use crate::{ContractError, state::{DATA, ROLE_CONSUMER, NODES}};
@@ -8,7 +8,7 @@ pub fn validate_insert_position(
     nicr: Uint256, 
     prev_id: Option<Addr>, 
     next_id: Option<Addr>
-) -> Result<bool, ContractError> {
+) -> StdResult<bool> {
     let data = DATA.load(deps.storage)?;
     let trove_manager = ROLE_CONSUMER.load_role_address(deps, Role::TroveManager)?;
     if prev_id.is_none() && next_id.is_none() {
@@ -60,7 +60,7 @@ pub fn find_insert_position(
     nicr: Uint256, 
     prev_id: Option<Addr>, 
     next_id: Option<Addr>
-) -> Result<(Option<Addr>, Option<Addr>), ContractError>{
+) -> StdResult<(Option<Addr>, Option<Addr>)>{
     let data = DATA.load(deps.storage)?;
     let trove_manager = ROLE_CONSUMER.load_role_address(deps, Role::TroveManager)?;
 
@@ -110,11 +110,11 @@ pub fn find_insert_position(
     }
 }
 
-pub fn descend_list(deps: Deps, nicr: Uint256, start_id: Option<Addr>) -> Result<(Option<Addr>, Option<Addr>), ContractError>{
+pub fn descend_list(deps: Deps, nicr: Uint256, start_id: Option<Addr>) -> StdResult<(Option<Addr>, Option<Addr>)>{
     let data = DATA.load(deps.storage)?;
     let trove_manager = ROLE_CONSUMER.load_role_address(deps, Role::TroveManager)?;
     if start_id.is_none() {
-        return Err(ContractError::StartIdIsNone {  })
+        return Err(StdError::parse_err("Addr", "SortedTroves: Start id shouldn't be none") )
     }
     let start_id_nicr: Uint256 = deps.querier.query_wasm_smart(
         trove_manager.clone(),
@@ -138,11 +138,11 @@ pub fn descend_list(deps: Deps, nicr: Uint256, start_id: Option<Addr>) -> Result
     Ok((prev_id, next_id))
 }
 
-pub fn ascend_list(deps: Deps, nicr: Uint256, start_id: Option<Addr>) -> Result<(Option<Addr>, Option<Addr>), ContractError>{
+pub fn ascend_list(deps: Deps, nicr: Uint256, start_id: Option<Addr>) -> StdResult<(Option<Addr>, Option<Addr>)>{
     let data = DATA.load(deps.storage)?;
     let trove_manager = ROLE_CONSUMER.load_role_address(deps, Role::TroveManager)?;
     if start_id.is_none() {
-        return Err(ContractError::StartIdIsNone {  })
+        return Err(StdError::parse_err("Addr", "SortedTroves: Start id shouldn't be none") )
     }
     let start_id_nicr: Uint256 = deps.querier.query_wasm_smart(
         trove_manager.clone(),
