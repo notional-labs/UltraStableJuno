@@ -49,6 +49,7 @@ serde = { version = "1.0.137", default-features = false, features = ["derive"] }
 thiserror = { version = "1.0.31" }
 ultra-controllers = { path = "../../packages/ultra-controllers" }
 ultra-base = { path = "../../packages/ultra-base" }
+getrandom = { version = "0.2", default-features = false, features = ["js"] }
 
 [dev-dependencies]
 cosmwasm-schema = "1.0.0"

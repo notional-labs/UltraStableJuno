@@ -429,7 +429,7 @@ fn find_insert_position(
             }
         )?;
         if NODES.may_load(deps.storage, prev_id.clone().unwrap())?.is_none()
-            && nicr > prev_id_nicr{
+            || nicr > prev_id_nicr{
             // `prev_id` does not exist anymore or now has a smaller NICR than the given NICR
             prev_id = None;
         }
@@ -443,7 +443,7 @@ fn find_insert_position(
             }
         )?;
         if NODES.may_load(deps.storage, next_id.clone().unwrap())?.is_none()
-            && nicr < next_id_nicr{
+            || nicr < next_id_nicr{
             // `prev_id` does not exist anymore or now has a smaller NICR than the given NICR
             next_id = None;
         }
