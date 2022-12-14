@@ -6,30 +6,35 @@ use serde::{Deserialize, Serialize};
 pub struct InstantiateMsg {
     pub name: String,
     pub owner: String,
+    pub max_size: Uint256
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
+    UpdateAdmin { 
+        admin : Addr 
+    }, 
+    UpdateRole { 
+        role_provider: Addr 
+    },
     Insert {
         id: String,
         nicr: Uint256,
-        prev_id: String,
-        next_id: String,
+        prev_id: Option<String>,
+        next_id: Option<String>,
     },
     ReInsert {
         id: String,
         new_nicr: Uint256,
-        prev_id: String,
-        next_id: String,
+        prev_id: Option<String>,
+        next_id: Option<String>,
     },
     Remove {
         id: String,
     },
     SetParams {
         size: Uint256,
-        borrower_operation_address: String,
-        trove_manager_address: String,
     },
 }
 
