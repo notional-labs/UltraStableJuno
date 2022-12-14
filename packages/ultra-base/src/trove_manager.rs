@@ -60,10 +60,10 @@ pub enum ExecuteMsg {
     // UpdateStakeAndTotalStakes {
     //     borrower: String,
     // },
-    // // Close a Trove
-    // CloseTrove {
-    //     borrower: String,
-    // },
+    // Close a Trove
+    CloseTrove {
+        borrower: String,
+    },
     // Push the owner's address to the Trove owners list, and record the corresponding array index on the Trove struct
     AddTroveOwnerToArray {
         borrower: String,
@@ -157,7 +157,8 @@ pub struct Trove {
     pub ultra_debt: Uint128,
     pub stake: Uint128,
     pub status: Status,
-    pub owner: Addr
+    pub owner: Addr,
+    pub index: Uint128
 }
 
 pub type TrovePK<'a> = &'a str;
@@ -173,7 +174,7 @@ impl IndexList<Trove> for TrovesIndexes<'_> {
 }
 
 pub struct Troves<'a> (
-    IndexedMap<'a, TrovePK<'a>, Trove, TrovesIndexes<'a>>,
+    IndexedMap<'a, Addr, Trove, TrovesIndexes<'a>>,
     PhantomData<Trove>,
 );
 
@@ -195,11 +196,15 @@ impl<'a> Troves<'a>{
     }
 
     pub fn delete(&self, store: &mut dyn Storage, owner: Addr) -> StdResult<()> {
-        self.0.remove(store, &owner.to_string())
+        self.0.remove(store, owner)
     }
 
     pub fn set(&self, store: &mut dyn Storage, owner: Addr, grantee: Trove) -> StdResult<()> {
-        self.0.save(store, &owner.to_string(), &grantee)
+        self.0.save(store, owner, &grantee)
+    }
+
+    pub fn get(&self, store: &dyn Storage, owner: Addr) -> StdResult<Option<Trove>> {
+        self.0.may_load(store, owner)
     }
 
     pub fn update<A, E>(&self, store: &mut dyn Storage, owner: Addr, action: A) -> Result<Trove, E>
@@ -211,9 +216,5 @@ impl<'a> Troves<'a>{
         let output = action(input)?;
         self.set(store, owner, output.clone())?;
         Ok(output)
-    }
-
-    pub fn get(&self, store: &dyn Storage, owner: Addr) -> StdResult<Option<Trove>> {
-        self.0.may_load(store, &owner.to_string())
     }
 }

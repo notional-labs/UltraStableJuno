@@ -12,7 +12,7 @@ use ultra_base::ultra_math::dec_pow;
 
 use crate::error::ContractError;
 use crate::state::{SudoParams, SUDO_PARAMS, ADMIN, ROLE_CONSUMER, Manager, State};
-use ultra_base::trove_manager::{InstantiateMsg, ExecuteMsg, QueryMsg, Status};
+use ultra_base::trove_manager::{InstantiateMsg, ExecuteMsg, QueryMsg, Status, Trove};
 
 
 // version info for migration info
@@ -70,6 +70,9 @@ pub fn execute(
             execute_liquidate(deps, env, info, borrower)
         },
 
+        ExecuteMsg::CloseTrove { borrower } => {
+            execute_close_trove(deps, env, info, borrower)
+        },
         ExecuteMsg::AddTroveOwnerToArray { borrower } => {
             execute_add_trove_owner_to_array(deps, env, info, borrower)
         }
@@ -121,16 +124,99 @@ pub fn execute_liquidate(
     Ok(res)
 }
 
+pub fn execute_close_trove(
+    deps: DepsMut, 
+    _env: Env, 
+    info: MessageInfo, 
+    borrower: String
+) -> Result<Response, ContractError> {
+    ROLE_CONSUMER
+        .assert_role(
+            deps.as_ref(), 
+            &info.sender,
+            vec![Role::BorrowerOperations],
+        )?;
+
+    let borrower_addr = deps.api.addr_validate(&borrower)?;
+    let state = State::default();
+    let trove_count = state.manager.load(deps.storage)?.trove_owner_count;
+
+    // TODO: assert sorted troves size > 1
+    if trove_count <= Uint128::from(1u128) {
+        return Err(ContractError::OnlyOneTroveExist {});
+    }
+
+    state
+        .troves
+        .update(deps.storage, borrower_addr, |trove| {
+        if trove.is_none() {
+            return Err(ContractError::TroveNotExist {})
+        }
+        let mut trove = trove.unwrap();
+        trove.status = Status::Closed;
+        trove.juno = Uint128::zero();
+        trove.ultra_debt = Uint128::zero();
+
+        // TODO: Create RewardSnapshot
+
+        // TODO: Remove trove
+        
+        // TODO: Remove borrower in sorted troves
+        Ok(trove)
+    })?;
+    let res = Response::new()
+        .add_attribute("action", "close_trove")
+        .add_attribute("borrower", borrower);
+    Ok(res)
+}
+
 pub fn execute_add_trove_owner_to_array(
     deps: DepsMut, 
     _env: Env, 
-    _info: MessageInfo, 
+    info: MessageInfo, 
     borrower: String
 ) -> Result<Response, ContractError> {
+    ROLE_CONSUMER
+    .assert_role(
+        deps.as_ref(), 
+        &info.sender,
+        vec![Role::BorrowerOperations],
+    )?;
+
+    let borrower_addr = deps.api.addr_validate(&borrower)?;
+
+    let state = State::default();
+    let index = state.manager.load(deps.storage)?.trove_owner_count;
+    state
+        .manager
+        .update(deps.storage, |mut manager| -> Result<Manager, ContractError> {
+            manager.trove_owner_count = index
+                .checked_add(Uint128::from(1u128))
+                .map_err(StdError::overflow)?;
+            Ok(manager)
+        })?;
+    
+    state
+        .troves    
+        .update(deps.storage, borrower_addr.clone(), |trove| {
+            if trove.is_some() {
+                return Err(ContractError::TroveExist {})
+            }
+            let trove = Trove{
+                juno: Uint128::zero(),
+                ultra_debt: Uint128::zero(),
+                stake: Uint128::zero(),
+                status: Status::Active,
+                owner: borrower_addr.clone(),
+                index
+            };
+            Ok(trove)
+        })?;
 
     let res = Response::new()
         .add_attribute("action", "add_trove_owner_to_array")
-        .add_attribute("trove_owner", borrower);
+        .add_attribute("trove_owner", borrower)
+        .add_attribute("trove_index", index.to_string());
     Ok(res)
 }
 
@@ -194,10 +280,9 @@ pub fn execute_set_trove_status(
             &info.sender,
             vec![Role::BorrowerOperations],
         )?;
+    let borrower_addr = deps.api.addr_validate(&borrower)?;
     
     let state = State::default();
-
-    let borrower_addr = deps.api.addr_validate(&borrower)?;
     state
         .troves    
         .update(deps.storage, borrower_addr, |trove| {
@@ -302,6 +387,7 @@ pub fn execute_increase_trove_debt(
         )?;
     
     let borrower_addr = deps.api.addr_validate(&borrower)?;
+
     let state = State::default();
     state
         .troves
@@ -337,6 +423,7 @@ pub fn execute_decrease_trove_debt(
         )?;
     
     let borrower_addr = deps.api.addr_validate(&borrower)?;
+
     let state = State::default();
     state
         .troves

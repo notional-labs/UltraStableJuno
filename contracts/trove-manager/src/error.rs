@@ -20,6 +20,12 @@ pub enum ContractError {
     #[error("TroveManager: Trove is not exist")]
     TroveNotExist {},
 
+    #[error("TroveManager: Trove existed")]
+    TroveExist {},
+
+    #[error("TroveManager: Only one trove in the system")]
+    OnlyOneTroveExist,
+    
     #[error("TroveManager: decay_base_rate must be between 0 and 1")]
     DecayBaseRateLargerThanOne {},
 }
