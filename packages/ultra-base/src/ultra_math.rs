@@ -1,12 +1,18 @@
-use cosmwasm_std::{Decimal256, StdError, StdResult, Uint128, OverflowError, OverflowOperation};
+use cosmwasm_std::{Decimal256, StdError, StdResult, Uint128, Uint256};
 
-pub const DECIMAL_PRECISION: u8 = 18;
+pub const NICR_PRECISION: u32 = 20; 
+pub const DECIMAL_PRECISION: u32 = 18;
 
 pub fn compute_cr(coll: Uint128, debt: Uint128, price: Decimal256) -> StdResult<Decimal256> {
     if debt != Uint128::zero() {
-        let new_coll_ratio: Decimal256 = Decimal256::from_ratio(coll, debt)
-            .checked_mul(price)
-            .map_err(StdError::overflow)?;
+        let new_coll_ratio: Decimal256 = Decimal256::from_ratio(
+            Uint256::from_u128(coll.u128())
+                .checked_mul(Decimal256::atomics(&price))
+                .map_err(StdError::overflow)?, 
+            debt
+                .checked_mul(Uint128::from(10u128).wrapping_pow(18))
+                .map_err(StdError::overflow)?
+            );   
         Ok(new_coll_ratio)
     } else {
         Ok(Decimal256::MAX)
@@ -37,6 +43,18 @@ pub fn compute_cr(coll: Uint128, debt: Uint128, price: Decimal256) -> StdResult<
 //     }
 //     Ok(Decimal256::MAX)
 // }
+pub fn compute_nominal_cr(coll: Uint128, debt: Uint128) -> StdResult<Decimal256> {
+    if debt != Uint128::zero() {
+        let nomial_coll_ratio: Decimal256 = Decimal256::from_ratio(
+            Uint256::from_u128(coll.u128())
+            .checked_mul(Uint256::from(10u128).wrapping_pow(NICR_PRECISION))
+            .map_err(StdError::overflow)?, 
+            debt);
+        Ok(nomial_coll_ratio)
+    } else {
+        Ok(Decimal256::MAX)
+    }
+}
 
 /* 
     * dec_pow: Exponentiation function for 18-digit decimal base, and integer exponent n.
@@ -57,7 +75,6 @@ pub fn compute_cr(coll: Uint128, debt: Uint128, price: Decimal256) -> StdResult<
     * In function 2), the difference in tokens issued at 1000 years and any time > 1000 years, will be negligible
     */
 
-// TODO: check if the math is correct or not
 pub fn dec_pow(base: Decimal256, minute: u64) -> StdResult<Decimal256> {
     let mut minute = if minute > 525600000 { 525600000 } else { minute };
     if minute == 0 { 
@@ -91,22 +108,4 @@ pub fn round_mul(x: Decimal256, y: Decimal256) -> Decimal256 {
     x.saturating_mul(y)
         .saturating_add(Decimal256::percent(50))
         .floor()
-}
-
-#[cfg(test)]
-mod tests {
-    use std::str::FromStr;
-    use super::*;
-
-    #[test]
-    fn round_mul_tests() {
-        let x1 = round_mul(Decimal256::from_str("0.6").unwrap(),
-            Decimal256::from_str("1.2").unwrap());
-        assert_eq!(x1, Decimal256::one());
-
-        let x2 = round_mul(Decimal256::from_str("1.9999999999").unwrap(),
-            Decimal256::from_str("2.3").unwrap());
-        
-        println!("{}", x2);
-    }
 }

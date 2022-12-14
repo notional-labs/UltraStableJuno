@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use cosmwasm_std::{Addr, Uint128, Storage, StdResult};
+use cosmwasm_std::{Addr, Uint128, Storage, StdResult, StdError};
 use cw_storage_plus::{UniqueIndex, MultiIndex, IndexList, Index, IndexedMap};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -194,15 +194,26 @@ impl<'a> Troves<'a>{
         )
     }
 
-    pub fn delete(&self, store: &mut dyn Storage, trove: &Trove) -> StdResult<()> {
-        self.0.remove(store, &trove.to_string())
+    pub fn delete(&self, store: &mut dyn Storage, owner: Addr) -> StdResult<()> {
+        self.0.remove(store, &owner.to_string())
     }
 
-    pub fn set(&self, store: &mut dyn Storage, role: &Role, grantee: Addr) -> StdResult<()> {
-        self.0.save(store, &role.to_string(), &grantee)
+    pub fn set(&self, store: &mut dyn Storage, owner: Addr, grantee: Trove) -> StdResult<()> {
+        self.0.save(store, &owner.to_string(), &grantee)
     }
 
-    pub fn get(&self, store: &dyn Storage, role: &Role) -> StdResult<Option<RoleRecord>> {
-        self.0.may_load(store, &role.to_string())
+    pub fn update<A, E>(&self, store: &mut dyn Storage, owner: Addr, action: A) -> Result<Trove, E>
+    where
+        A: FnOnce(Option<Trove>) -> Result<Trove, E>,
+        E: From<StdError>,
+    {
+        let input = self.get(store, owner.clone())?;
+        let output = action(input)?;
+        self.set(store, owner, output.clone())?;
+        Ok(output)
+    }
+
+    pub fn get(&self, store: &dyn Storage, owner: Addr) -> StdResult<Option<Trove>> {
+        self.0.may_load(store, &owner.to_string())
     }
 }

@@ -230,7 +230,11 @@ pub fn execute_increase_trove_coll(
         )?;
     
     let borrower_addr = deps.api.addr_validate(&borrower)?;
-    TROVES.update(deps.storage, borrower_addr, |trove| {
+
+    let state = State::default();
+    state
+        .troves
+        .update(deps.storage, borrower_addr, |trove| {
         if trove.is_none() {
             return Err(ContractError::TroveNotExist {})
         }
@@ -263,7 +267,10 @@ pub fn execute_decrease_trove_coll(
         )?;
     
     let borrower_addr = deps.api.addr_validate(&borrower)?;
-    TROVES.update(deps.storage, borrower_addr, |trove| {
+
+    let state = State::default();
+    state
+        .troves.update(deps.storage, borrower_addr, |trove| {
         if trove.is_none() {
             return Err(ContractError::TroveNotExist {})
         }
@@ -295,7 +302,10 @@ pub fn execute_increase_trove_debt(
         )?;
     
     let borrower_addr = deps.api.addr_validate(&borrower)?;
-    TROVES.update(deps.storage, borrower_addr, |trove| {
+    let state = State::default();
+    state
+        .troves
+        .update(deps.storage, borrower_addr, |trove| {
         if trove.is_none() {
             return Err(ContractError::TroveNotExist {})
         }
@@ -327,7 +337,10 @@ pub fn execute_decrease_trove_debt(
         )?;
     
     let borrower_addr = deps.api.addr_validate(&borrower)?;
-    TROVES.update(deps.storage, borrower_addr, |trove| {
+    let state = State::default();
+    state
+        .troves
+        .update(deps.storage, borrower_addr, |trove| {
         if trove.is_none() {
             return Err(ContractError::TroveNotExist {})
         }
