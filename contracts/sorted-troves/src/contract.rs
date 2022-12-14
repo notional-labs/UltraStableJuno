@@ -202,11 +202,6 @@ pub fn execute_insert(
 
     data.size += Uint256::from_u128(1u128);
     DATA.save(deps.storage, &data)?;
-    // if data.size > Uint256::from_u128(1u128) {
-
-    // } else {
-    //     data.head = 
-    // }
 
     let res = Response::new()
         .add_attribute("action", "insert")
