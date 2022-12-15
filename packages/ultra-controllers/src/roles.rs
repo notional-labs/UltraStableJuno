@@ -45,7 +45,7 @@ impl<'a, Role: ToString + Serialize> RoleConsumer<'a, Role> {
         Ok(self.0.save(storage, &role_provider_addr)?)
     }
     
-    pub fn load_role_address(&self, deps: Deps, role: Role) -> Result<Addr, RolesError> {
+    pub fn load_role_address(&self, deps: Deps, role: Role) -> StdResult<Addr> {
         let role_provider_addr = self.0.load(deps.storage)?;
         let res: ultra_base::role_provider::RoleAddressResponse = deps.querier.query_wasm_smart(
             role_provider_addr,
