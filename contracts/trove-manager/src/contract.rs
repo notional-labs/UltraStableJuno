@@ -3,7 +3,7 @@ use std::str::FromStr;
 
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{DepsMut, Env, MessageInfo, Response, Storage, Addr, Uint128, StdError, Decimal256, Uint256};
+use cosmwasm_std::{DepsMut, Env, MessageInfo, Response, Storage, Addr, Uint128, StdError, Decimal256, Uint256, CosmosMsg, WasmMsg, to_binary};
 
 use cw2::set_contract_version;
 use cw_utils::maybe_addr;
@@ -11,7 +11,7 @@ use ultra_base::role_provider::Role;
 use ultra_base::ultra_math::dec_pow;
 
 use crate::error::ContractError;
-use crate::state::{SudoParams, SUDO_PARAMS, ADMIN, ROLE_CONSUMER, Manager, State};
+use crate::state::{SudoParams, SUDO_PARAMS, ADMIN, ROLE_CONSUMER, Manager, RewardSnapshot, MANAGER, TROVES, SNAPSHOTS, TROVE_OWNER_IDX};
 use ultra_base::trove_manager::{InstantiateMsg, ExecuteMsg, QueryMsg, Status, Trove};
 
 
@@ -40,10 +40,7 @@ pub fn instantiate(
     };
     SUDO_PARAMS.save(deps.storage, &sudo_params)?;
 
-    let state = State::default();
-
-    state
-        .manager
+    MANAGER
         .save(deps.storage, &Manager{
             trove_owner_count: Uint128::zero(),
             base_rate: Decimal256::zero(),
@@ -69,7 +66,9 @@ pub fn execute(
         ExecuteMsg::Liquidate { borrower } => {
             execute_liquidate(deps, env, info, borrower)
         },
-
+        ExecuteMsg::UpdateStakeAndTotalStakes { borrower } => {
+            execute_update_stake_and_total_stakes(deps, env, info, borrower)
+        },
         ExecuteMsg::CloseTrove { borrower } => {
             execute_close_trove(deps, env, info, borrower)
         },
@@ -124,6 +123,26 @@ pub fn execute_liquidate(
     Ok(res)
 }
 
+pub fn execute_update_stake_and_total_stakes(
+    deps: DepsMut, 
+    _env: Env, 
+    info: MessageInfo, 
+    borrower: String
+) -> Result<Response, ContractError> {
+    ROLE_CONSUMER
+        .assert_role(
+            deps.as_ref(), 
+            &info.sender,
+            vec![Role::BorrowerOperations],
+        )?;
+
+    
+    let res = Response::new()
+        .add_attribute("action", "update_stake_and_total_stakes")
+        .add_attribute("borrower", borrower);
+    Ok(res)
+}
+
 pub fn execute_close_trove(
     deps: DepsMut, 
     _env: Env, 
@@ -138,8 +157,7 @@ pub fn execute_close_trove(
         )?;
 
     let borrower_addr = deps.api.addr_validate(&borrower)?;
-    let state = State::default();
-    let trove_count = state.manager.load(deps.storage)?.trove_owner_count;
+    let trove_count = MANAGER.load(deps.storage)?.trove_owner_count;
 
     let sorted_troves = ROLE_CONSUMER
         .load_role_address(
@@ -149,34 +167,49 @@ pub fn execute_close_trove(
     let size: Uint256 = deps
         .querier
         .query_wasm_smart(
-            sorted_troves, 
+            sorted_troves.clone(), 
             &ultra_base::sorted_troves::QueryMsg::GetSize {  })?;
         
     if trove_count <= Uint128::from(1u128) && size <= Uint256::from_u128(1u128) {
         return Err(ContractError::OnlyOneTroveExist {});
     }
 
-    state
-        .troves
-        .update(deps.storage, borrower_addr, |trove| {
-        if trove.is_none() {
-            return Err(ContractError::TroveNotExist {})
-        }
-        let mut trove = trove.unwrap();
-        trove.status = Status::Closed;
-        trove.juno = Uint128::zero();
-        trove.ultra_debt = Uint128::zero();
 
-        // TODO: Create RewardSnapshot
+    // Remove trove by index
+    let trove_idx = TROVE_OWNER_IDX.load(deps.storage, borrower_addr.clone())?; 
+    let last_trove_idx = trove_count - Uint128::one();   
 
-        // TODO: Remove trove
-        
-        // TODO: Remove borrower in sorted troves
-        Ok(trove)
+    if trove_idx == last_trove_idx {
+        TROVE_OWNER_IDX.remove(deps.storage, borrower_addr.clone());
+        TROVES.remove(deps.storage, trove_idx.to_string());
+    } else {
+        let (last_trove_owner, last_trove) = TROVES.load(deps.storage, last_trove_idx.to_string())?; 
+    
+        TROVE_OWNER_IDX.remove(deps.storage, borrower_addr.clone());
+        TROVE_OWNER_IDX.save(deps.storage, last_trove_owner.clone(), &trove_idx)?;
+        TROVES.remove(deps.storage, last_trove_idx.to_string());
+        TROVES.save(deps.storage, last_trove_idx.to_string(), &(last_trove_owner, last_trove))?;
+    }
+
+    SNAPSHOTS.remove(deps.storage, borrower_addr.clone());
+    MANAGER.update(deps.storage, |mut manager | -> Result<Manager, ContractError>{
+        manager.trove_owner_count -= Uint128::one();
+        Ok(manager)
     })?;
+
+    let remove_borrower_msg: CosmosMsg = CosmosMsg::Wasm(
+        WasmMsg::Execute{
+            contract_addr: sorted_troves.to_string(),
+            msg: to_binary(&ultra_base::sorted_troves::ExecuteMsg::Remove { 
+                id: borrower_addr.to_string() 
+            })?,
+            funds: vec![]
+        }
+    );
     let res = Response::new()
         .add_attribute("action", "close_trove")
-        .add_attribute("borrower", borrower);
+        .add_attribute("borrower", borrower)
+        .add_message(remove_borrower_msg);
     Ok(res)
 }
 
@@ -195,10 +228,8 @@ pub fn execute_add_trove_owner_to_array(
 
     let borrower_addr = deps.api.addr_validate(&borrower)?;
 
-    let state = State::default();
-    let index = state.manager.load(deps.storage)?.trove_owner_count;
-    state
-        .manager
+    let index = MANAGER.load(deps.storage)?.trove_owner_count;
+    MANAGER
         .update(deps.storage, |mut manager| -> Result<Manager, ContractError> {
             manager.trove_owner_count = index
                 .checked_add(Uint128::from(1u128))
@@ -206,21 +237,21 @@ pub fn execute_add_trove_owner_to_array(
             Ok(manager)
         })?;
     
-    state
-        .troves    
-        .update(deps.storage, borrower_addr.clone(), |trove| {
-            if trove.is_some() {
+    let trove_idx = TROVE_OWNER_IDX.load(deps.storage, borrower_addr.clone())?;    
+    TROVES  
+        .update(deps.storage, trove_idx.to_string(), |t| {
+            if t.is_some() {
                 return Err(ContractError::TroveExist {})
             }
             let trove = Trove{
-                juno: Uint128::zero(),
-                ultra_debt: Uint128::zero(),
+                coll: Uint128::zero(),
+                debt: Uint128::zero(),
                 stake: Uint128::zero(),
                 status: Status::Active,
                 owner: borrower_addr.clone(),
                 index
             };
-            Ok(trove)
+            Ok((borrower_addr, trove))
         })?;
 
     let res = Response::new()
@@ -242,8 +273,7 @@ pub fn execute_decay_base_rate_from_borrowing(
             vec![Role::BorrowerOperations],
         )?;
 
-    let state = State::default();
-    let mut manager = state.manager.load(deps.storage)?;
+    let mut manager = MANAGER.load(deps.storage)?;
 
     // Half-life of 12h. 12h = 720 min
     // (1/2) = d^720 => d = (1/2)^(1/720)
@@ -269,7 +299,7 @@ pub fn execute_decay_base_rate_from_borrowing(
         manager.last_fee_operation_time = env.block.time;
     }
 
-    state.manager.save(deps.storage, &manager)?;
+    MANAGER.save(deps.storage, &manager)?;
     let res = Response::new()
         .add_attribute("action", "decay_base_rate_from_borrowing")
         .add_attribute("new_base_rate", decay_base_rate.to_string())
@@ -292,16 +322,15 @@ pub fn execute_set_trove_status(
         )?;
     let borrower_addr = deps.api.addr_validate(&borrower)?;
     
-    let state = State::default();
-    state
-        .troves    
-        .update(deps.storage, borrower_addr, |trove| {
-            if trove.is_none() {
+    let trove_idx = TROVE_OWNER_IDX.load(deps.storage, borrower_addr)?;    
+    TROVES    
+        .update(deps.storage, trove_idx.to_string(), |t| {
+            if t.is_none() {
                 return Err(ContractError::TroveNotExist {})
             }
-            let mut trove = trove.unwrap();
+            let (owner, mut trove) = t.unwrap();
             trove.status = status.clone();
-            Ok(trove)
+            Ok((owner, trove))
         })?;
     let res = Response::new()
         .add_attribute("action", "set_trove_status")
@@ -326,18 +355,17 @@ pub fn execute_increase_trove_coll(
     
     let borrower_addr = deps.api.addr_validate(&borrower)?;
 
-    let state = State::default();
-    state
-        .troves
-        .update(deps.storage, borrower_addr, |trove| {
-        if trove.is_none() {
+    let trove_idx = TROVE_OWNER_IDX.load(deps.storage, borrower_addr)?;    
+    TROVES
+        .update(deps.storage, trove_idx.to_string(), |t| {
+        if t.is_none() {
             return Err(ContractError::TroveNotExist {})
         }
-        let mut trove = trove.unwrap();
-        trove.juno = trove.juno
+        let (owner, mut trove) = t.unwrap();
+        trove.coll = trove.coll
             .checked_add(coll_increase)
             .map_err(StdError::overflow)?;
-        Ok(trove)
+        Ok((owner, trove))
     })?;
     let res = Response::new()
         .add_attribute("action", "increase_trove_coll")
@@ -363,17 +391,16 @@ pub fn execute_decrease_trove_coll(
     
     let borrower_addr = deps.api.addr_validate(&borrower)?;
 
-    let state = State::default();
-    state
-        .troves.update(deps.storage, borrower_addr, |trove| {
-        if trove.is_none() {
+    let trove_idx = TROVE_OWNER_IDX.load(deps.storage, borrower_addr)?;    
+    TROVES.update(deps.storage, trove_idx.to_string(), |t| {
+        if t.is_none() {
             return Err(ContractError::TroveNotExist {})
         }
-        let mut trove = trove.unwrap();
-        trove.juno = trove.juno
+        let (owner, mut trove) = t.unwrap();
+        trove.coll = trove.coll
             .checked_sub(coll_decrease)
             .map_err(StdError::overflow)?;
-        Ok(trove)
+        Ok((owner, trove))
     })?;
     let res = Response::new()
         .add_attribute("action", "decrease_trove_coll")
@@ -398,18 +425,17 @@ pub fn execute_increase_trove_debt(
     
     let borrower_addr = deps.api.addr_validate(&borrower)?;
 
-    let state = State::default();
-    state
-        .troves
-        .update(deps.storage, borrower_addr, |trove| {
-        if trove.is_none() {
+    let trove_idx = TROVE_OWNER_IDX.load(deps.storage, borrower_addr)?;
+    TROVES
+        .update(deps.storage, trove_idx.to_string(), |t| {
+        if t.is_none() {
             return Err(ContractError::TroveNotExist {})
         }
-        let mut trove = trove.unwrap();
-        trove.ultra_debt = trove.ultra_debt
+        let (owner, mut trove) = t.unwrap();
+        trove.debt = trove.debt
             .checked_add(debt_increase)
             .map_err(StdError::overflow)?;
-        Ok(trove)
+        Ok((owner, trove))
     })?;
     let res = Response::new()
         .add_attribute("action", "increase_trove_debt")
@@ -434,18 +460,17 @@ pub fn execute_decrease_trove_debt(
     
     let borrower_addr = deps.api.addr_validate(&borrower)?;
 
-    let state = State::default();
-    state
-        .troves
-        .update(deps.storage, borrower_addr, |trove| {
-        if trove.is_none() {
+    let trove_idx = TROVE_OWNER_IDX.load(deps.storage, borrower_addr)?;
+    TROVES
+        .update(deps.storage, trove_idx.to_string(), |t| {
+        if t.is_none() {
             return Err(ContractError::TroveNotExist {})
         }
-        let mut trove = trove.unwrap();
-        trove.ultra_debt = trove.ultra_debt
+        let (owner, mut trove) = t.unwrap();
+        trove.debt = trove.debt
             .checked_sub(debt_decrease)
             .map_err(StdError::overflow)?;
-        Ok(trove)
+        Ok((owner, trove))
     })?;
     let res = Response::new()
         .add_attribute("action", "increase_trove_debt")

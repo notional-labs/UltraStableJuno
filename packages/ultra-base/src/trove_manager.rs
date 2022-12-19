@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use cosmwasm_std::{Addr, Uint128, Storage, StdResult, StdError};
+use cosmwasm_std::{Addr, Uint128, Storage, StdResult, StdError, Order};
 use cw_storage_plus::{UniqueIndex, MultiIndex, IndexList, Index, IndexedMap};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -56,10 +56,10 @@ pub enum ExecuteMsg {
     // RemoveStake {
     //     borrower: String,
     // },
-    // // Update borrower's stake based on their latest collateral value
-    // UpdateStakeAndTotalStakes {
-    //     borrower: String,
-    // },
+    // Update borrower's stake based on their latest collateral value
+    UpdateStakeAndTotalStakes {
+        borrower: String,
+    },
     // Close a Trove
     CloseTrove {
         borrower: String,
@@ -153,68 +153,10 @@ pub enum Status{
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 pub struct Trove {
-    pub juno: Uint128,
-    pub ultra_debt: Uint128,
+    pub coll: Uint128,
+    pub debt: Uint128,
     pub stake: Uint128,
     pub status: Status,
     pub owner: Addr,
     pub index: Uint128
-}
-
-pub type TrovePK<'a> = &'a str;
-pub struct TrovesIndexes<'a> {
-    pub trove_owner: MultiIndex<'a, Addr, Trove, Uint128>
-}
-
-impl IndexList<Trove> for TrovesIndexes<'_> {
-    fn get_indexes(&'_ self) -> Box<dyn Iterator<Item = &'_ dyn Index<Trove>> + '_> {
-        let v: Vec<&dyn Index<Trove>> = vec![&self.trove_owner];
-        Box::new(v.into_iter())
-    }
-}
-
-pub struct Troves<'a> (
-    IndexedMap<'a, Addr, Trove, TrovesIndexes<'a>>,
-    PhantomData<Trove>,
-);
-
-impl<'a> Troves<'a>{
-    pub fn new(namespace: &'a str, troves_by_addr_idx_namespace: &'a str) -> Self{
-        Troves(
-            IndexedMap::new(
-                namespace, 
-                TrovesIndexes{
-                    trove_owner: MultiIndex::new(
-                                |t| t.owner.clone(),
-                                namespace,
-                                troves_by_addr_idx_namespace,
-                            ),
-                }
-            ),
-            PhantomData
-        )
-    }
-
-    pub fn delete(&self, store: &mut dyn Storage, owner: Addr) -> StdResult<()> {
-        self.0.remove(store, owner)
-    }
-
-    pub fn set(&self, store: &mut dyn Storage, owner: Addr, grantee: Trove) -> StdResult<()> {
-        self.0.save(store, owner, &grantee)
-    }
-
-    pub fn get(&self, store: &dyn Storage, owner: Addr) -> StdResult<Option<Trove>> {
-        self.0.may_load(store, owner)
-    }
-
-    pub fn update<A, E>(&self, store: &mut dyn Storage, owner: Addr, action: A) -> Result<Trove, E>
-    where
-        A: FnOnce(Option<Trove>) -> Result<Trove, E>,
-        E: From<StdError>,
-    {
-        let input = self.get(store, owner.clone())?;
-        let output = action(input)?;
-        self.set(store, owner, output.clone())?;
-        Ok(output)
-    }
 }
