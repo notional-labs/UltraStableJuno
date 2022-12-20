@@ -6,21 +6,17 @@ use serde::{Deserialize, Serialize};
 pub struct InstantiateMsg {
     pub name: String,
     pub owner: String,
-    pub trove_manager: String,
-    pub active_pool: String,
-    pub default_pool: String,
-    pub stability_pool: String,
-    pub gas_pool: String,
-    pub coll_surplus_pool: String,
-    pub price_feed: String,
-    pub sorted_troves: String,
-    pub ultra: String,
-    pub lqty_staking: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
+    UpdateAdmin {
+        admin: Addr,
+    },
+    UpdateRole {
+        role_provider: Addr,
+    },
     /// Send JUNO as collateral to a trove
     AddColl {
         upper_hint: Addr,
@@ -28,13 +24,13 @@ pub enum ExecuteMsg {
     },
     /// Alongside a debt change, this function can perform either a collateral top-up or a collateral withdrawal.
     AdjustTrove {
-        borrower: Addr,
+        borrower: String,
         coll_withdrawal: Uint128,
         ultra_change: Uint128,
         is_debt_increase: bool,
         max_fee_percentage: Decimal256,
-        upper_hint: Addr,
-        lower_hint: Addr,
+        upper_hint: String,
+        lower_hint: String,
     },
     /// Claim remaining collateral from a redemption or from a liquidation with ICR > MCR in Recovery Mode
     ClaimCollateral {},
@@ -48,8 +44,8 @@ pub enum ExecuteMsg {
     OpenTrove {
         max_fee_percentage: Decimal256,
         ultra_amount: Uint128,
-        upper_hint: Addr,
-        lower_hint: Addr,
+        upper_hint: String,
+        lower_hint: String,
     },
     /// Burn the specified amount of ULTRA from `account` and decreases the total active debt
     RepayULTRA {

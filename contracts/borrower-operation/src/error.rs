@@ -26,4 +26,22 @@ pub enum ContractError {
 
     #[error("BorrowerOperation:  An operation that would result in TCR < CCR is not permitted")]
     NewTCRNotAboveCCR {},
+
+    #[error("BorrowerOperation: Debt increase requires non-zero debtChange")]
+    ZeroDebtChange {},
+
+    #[error("BorrowerOperation: Cannot withdraw and add coll")]
+    SingularCollChange {},
+
+    #[error("BorrowerOperation: There must be either a collateral change or a debt change")]
+    ZeroAdjustment {},
+
+    #[error("BorrowerOperation: Cannot decrease your Trove's ICR in Recovery Mode")]
+    NewICRBelowOldICR {},
+
+    #[error("BorrowerOperation: Amount repaid must not be larger than the Trove's debt")]
+    InvalidUltraRepayment {}, 
+
+    #[error("BorrowerOperation:  Caller doesnt have enough Ultra to make repayment")]
+    InsufficientUltra {}, 
 }

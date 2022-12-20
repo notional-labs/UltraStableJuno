@@ -1,4 +1,4 @@
-use cosmwasm_std::{Addr, Uint256};
+use cosmwasm_std::{Addr, Uint256, Decimal256};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -20,13 +20,13 @@ pub enum ExecuteMsg {
     },
     Insert {
         id: String,
-        nicr: Uint256,
+        nicr: Decimal256,
         prev_id: Option<String>,
         next_id: Option<String>,
     },
     ReInsert {
         id: String,
-        new_nicr: Uint256,
+        new_nicr: Decimal256,
         prev_id: Option<String>,
         next_id: Option<String>,
     },

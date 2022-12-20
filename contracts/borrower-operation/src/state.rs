@@ -1,8 +1,9 @@
-use cosmwasm_std::{Addr, Decimal256, Uint128, CanonicalAddr};
+use cosmwasm_std::{Addr, CanonicalAddr, Decimal256, Uint128};
 use cw_storage_plus::Item;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ultra_controllers::roles::RoleConsumer;
+use cw_controllers::Admin;
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 pub struct Trove {
@@ -34,18 +35,5 @@ impl<'a> Default for State<'a> {
 }
 
 pub const SUDO_PARAMS: Item<SudoParams> = Item::new("sudo-params");
-pub const CONFIG: Item<Config> = Item::new("config");
-
-#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
-pub struct Config {
-    pub trove_manager: CanonicalAddr,
-    pub active_pool: CanonicalAddr,
-    pub default_pool: CanonicalAddr,
-    pub stability_pool: CanonicalAddr,
-    pub gas_pool: CanonicalAddr,
-    pub coll_surplus_pool: CanonicalAddr,
-    pub price_feed: CanonicalAddr,
-    pub sorted_troves: CanonicalAddr,
-    pub ultra: CanonicalAddr,
-    pub lqty_staking: CanonicalAddr,
-}
+pub const ROLE_CONSUMER : RoleConsumer = RoleConsumer::new("role_provider");
+pub const ADMIN: Admin = Admin::new("admin");
