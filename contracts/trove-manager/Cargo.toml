@@ -29,6 +29,8 @@ serde = { version = "1.0.145", default-features = false, features = ["derive"] }
 thiserror = { version = "1.0.31" }
 ultra-base = { path = "../../packages/ultra-base" }
 ultra-controllers = { path = "../../packages/ultra-controllers", default-features = false }
+ultra-token = { path = "../ultra-token", default-features = false }
+cw20 = { version = "0.13.4" }
 
 [dev-dependencies]
 cw-multi-test = { version = "0.13.4" }

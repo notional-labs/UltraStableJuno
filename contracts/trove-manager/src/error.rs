@@ -17,8 +17,8 @@ pub enum ContractError {
     #[error("UnauthorizedOwner")]
     UnauthorizedOwner {},
 
-    #[error("TroveManager: Trove is not exist")]
-    TroveNotExist {},
+    #[error("TroveManager: Trove is not exist or is closed")]
+    TroveNotActive {},
 
     #[error("TroveManager: Trove existed")]
     TroveExist {},
@@ -28,4 +28,22 @@ pub enum ContractError {
     
     #[error("TroveManager: decay_base_rate must be between 0 and 1")]
     DecayBaseRateLargerThanOne {},
+
+    #[error("TroveManager: total_stake_snapshot must be positive")]
+    TotalStakeSnapshotIsZero {},
+
+    #[error("TroveManager: max_fee_percentage must be between 0.5% and 100%")]
+    MaxFeePercentageInvalid {},
+
+    #[error("TroveManager: Cannot redeem when TCR < MCR")]
+    TCRLessThanMCR {},
+
+    #[error("TroveManager: Amount must be greater than zero")]
+    AmountIsZero {},
+
+    #[error("TroveManager: Requested redemption amount must be <= user's ultra token balance")]
+    InsufficientBalance {}, 
+
+    #[error("TroveManager: Redeemer's balance over total UltraDebt supply")]
+    BalanceOverSupply {},
 }

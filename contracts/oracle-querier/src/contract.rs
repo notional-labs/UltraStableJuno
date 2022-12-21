@@ -18,8 +18,6 @@ use ultra_base::oracle::{
 const CONTRACT_NAME: &str = "crates.io:oracle-querier";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-pub const NATIVE_JUNO_DENOM: &str = "ujuno";
-
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
     deps: DepsMut,

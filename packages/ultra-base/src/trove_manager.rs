@@ -1,7 +1,5 @@
-use std::marker::PhantomData;
 
-use cosmwasm_std::{Addr, Uint128, Storage, StdResult, StdError, Order};
-use cw_storage_plus::{UniqueIndex, MultiIndex, IndexList, Index, IndexedMap};
+use cosmwasm_std::{Addr, Uint128, Decimal256, Timestamp};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -34,28 +32,28 @@ pub enum ExecuteMsg {
     // },
     // // Attempt to liquidate a custom list of troves provided by the caller.
     // BatchLiquidateTroves {},
-    // // Send ultra_amount $ULTRA to the system and redeem the corresponding amount of collateral from as many Troves
-    // // as are needed to fill the redemption request.
-    // RedeemCollateral {
-    //     ultra_amount: Uint128,
-    //     first_redemption_hint: String,
-    //     upper_partial_redemption_hint: String,
-    //     lower_partial_redemption_hint: String,
-    //     max_iterations: Uint128,
-    //     max_fee_percentage: Uint128,
-    // },
-    // // Add the borrowers's coll and debt rewards earned from redistributions, to their Trove
-    // ApplyPendingRewards {
-    //     borrower: String,
-    // },
-    // // Update borrower's snapshots of L_JUNO and L_ULTRADebt to reflect the current values
-    // UpdateTroveRewardSnapshots {
-    //     borrower: String,
-    // },
-    // // Remove borrower's stake from the totalStakes sum, and set their stake to 0
-    // RemoveStake {
-    //     borrower: String,
-    // },
+    // Send ultra_amount $ULTRA to the system and redeem the corresponding amount of collateral from as many Troves
+    // as are needed to fill the redemption request.
+    RedeemCollateral {
+        ultra_amount: Uint128,
+        first_redemption_hint: Option<String>,
+        upper_partial_redemption_hint: String,
+        lower_partial_redemption_hint: String,
+        max_iterations: Uint128,
+        max_fee_percentage: Decimal256,
+    },
+    // Add the borrowers's coll and debt rewards earned from redistributions, to their Trove
+    ApplyPendingRewards {
+        borrower: String,
+    },
+    // Update borrower's snapshots of L_JUNO and L_ULTRADebt to reflect the current values
+    UpdateTroveRewardSnapshots {
+        borrower: String,
+    },
+    // Remove borrower's stake from the totalStakes sum, and set their stake to 0
+    RemoveStake {
+        borrower: String,
+    },
     // Update borrower's stake based on their latest collateral value
     UpdateStakeAndTotalStakes {
         borrower: String,
@@ -152,6 +150,24 @@ pub enum Status{
 
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct Manager {
+    pub trove_owner_count: Uint128,
+    pub base_rate : Decimal256,
+    pub last_fee_operation_time : Timestamp,
+    pub total_stake_snapshot: Uint128,
+    pub total_collateral_snapshot: Uint128,
+    pub total_stake: Uint128,
+    pub total_liquidation_juno: Uint128,
+    pub total_liquidation_ultra_debt: Uint128,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct RewardSnapshot {
+    pub juno: Uint128,
+    pub ultra_debt: Uint128
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 pub struct Trove {
     pub coll: Uint128,
     pub debt: Uint128,
@@ -159,4 +175,38 @@ pub struct Trove {
     pub status: Status,
     pub owner: Addr,
     pub index: Uint128
+}
+
+// --- Variable container structs for redemptions ---
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct RedemptionTotals {
+    pub remaining_ultra_debt: Uint128,
+    pub total_ultra_debt_to_redeem: Uint128,
+    pub total_juno_drawn: Uint128,
+    pub juno_fee: Uint128,
+    pub juno_to_send_to_redeemer: Uint128,
+    pub decayed_base_rate: Uint128,
+    pub price: Uint128,
+    pub total_ultra_debt_supply_at_start: Uint128,
+}
+
+impl Default for RedemptionTotals{
+    fn default() -> Self{
+        Self {
+            remaining_ultra_debt: Uint128::zero(),
+            total_ultra_debt_to_redeem: Uint128::zero(),
+            total_juno_drawn: Uint128::zero(),
+            juno_fee: Uint128::zero(),
+            juno_to_send_to_redeemer: Uint128::zero(),
+            decayed_base_rate: Uint128::zero(),
+            price: Uint128::zero(),
+            total_ultra_debt_supply_at_start: Uint128::zero(),
+        }
+    }
+}
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct SingleRedemptionValues {
+    pub ultra_debt_lot: Uint128,
+    pub juno_lot: Uint128,
+    pub cancelled_partial: bool
 }

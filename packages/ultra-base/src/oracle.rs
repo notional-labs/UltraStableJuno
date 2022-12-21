@@ -2,6 +2,8 @@ use cosmwasm_std::{CustomQuery, Decimal};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+pub const NATIVE_JUNO_DENOM: &str = "ujuno";
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {}
 
