@@ -374,6 +374,7 @@ pub fn query(
         QueryMsg::GetLast {  } => to_binary(&query_last(deps)?),
         QueryMsg::GetNext { id } => to_binary(&query_next(deps, id)?),
         QueryMsg::GetPrev { id } => to_binary(&query_prev(deps, id)?),
+        QueryMsg::Contains { id } => to_binary(&query_contains(deps, id)?),
         QueryMsg::FindInsertPosition { nicr, prev_id, next_id } => {
             let prev_id = maybe_addr(deps.api, Some(prev_id))?;
             let next_id = maybe_addr(deps.api, Some(next_id))?;
@@ -453,4 +454,10 @@ pub fn query_is_empty(deps: Deps) -> StdResult<bool> {
 pub fn query_is_full(deps: Deps) -> StdResult<bool> {
     let data = DATA.load(deps.storage)?;
     Ok(data.size == data.max_size)
+}
+
+pub fn query_contains(deps: Deps, id: String) -> StdResult<bool> {
+    let id_addr = deps.api.addr_validate(&id)?;
+    let contain = NODES.may_load(deps.storage, id_addr)?.is_some(); 
+    Ok(contain)
 }

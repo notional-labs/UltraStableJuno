@@ -52,6 +52,9 @@ pub enum QueryMsg {
     GetPrev {
         id: String,
     },
+    Contains {
+        id: String,
+    },
     FindInsertPosition {
         nicr: Uint256,
         prev_id: String,
