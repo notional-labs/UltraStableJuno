@@ -458,6 +458,6 @@ pub fn query_is_full(deps: Deps) -> StdResult<bool> {
 
 pub fn query_contains(deps: Deps, id: String) -> StdResult<bool> {
     let id_addr = deps.api.addr_validate(&id)?;
-    let contain = NODES.may_load(deps.storage, id_addr)?.is_some(); 
-    Ok(contain)
+    let contains = NODES.may_load(deps.storage, id_addr)?.is_some(); 
+    Ok(contains)
 }

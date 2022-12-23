@@ -9,10 +9,10 @@ use cw2::set_contract_version;
 use cw20::BalanceResponse;
 use cw_utils::maybe_addr;
 
-use ultra_base::querier::MCR;
+use ultra_base::querier::{MCR, REDEMPTION_FEE_FLOOR};
 use ultra_base::role_provider::Role;
 use ultra_base::sorted_troves;
-use ultra_base::ultra_math::{dec_pow, compute_cr};
+use ultra_base::ultra_math::{dec_pow, compute_cr, compute_nominal_cr};
 
 use crate::error::ContractError;
 use crate::state::{SudoParams, SUDO_PARAMS, ADMIN, ROLE_CONSUMER, MANAGER, TROVES, SNAPSHOTS, TROVE_OWNER_IDX};
@@ -24,6 +24,12 @@ const CONTRACT_NAME: &str = "crates.io:trove-manager";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub const ONE_MINUTE: u64 = 60_000_000_000;
+
+/*
+    * BETA: 18 digit decimal. Parameter by which to divide the redeemed fraction, in order to calc the new base rate from a redemption.
+    * Corresponds to (1 / ALPHA) in the white paper.
+    */
+pub const BETA: u8 = 2;
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
@@ -47,7 +53,7 @@ pub fn instantiate(
     MANAGER
         .save(deps.storage, &Manager{
             trove_owner_count: Uint128::zero(),
-            base_rate: Decimal256::zero(),
+            base_rate: Decimal::zero(),
             last_fee_operation_time: env.block.time,
             total_stake_snapshot: Uint128::zero(),
             total_collateral_snapshot: Uint128::zero(),
@@ -163,8 +169,8 @@ pub fn execute_liquidate(
 }
 
 pub fn execute_redeem_collateral(
-    deps: DepsMut, 
-    _env: Env, 
+    mut deps: DepsMut, 
+    env: Env, 
     info: MessageInfo, 
     ultra_amount: Uint128,
     first_redemption_hint: Option<String>,
@@ -182,10 +188,12 @@ pub fn execute_redeem_collateral(
     let default_pool_addr = ROLE_CONSUMER.load_role_address(deps.as_ref(), Role::DefaultPool)?;
     let active_pool_addr = ROLE_CONSUMER.load_role_address(deps.as_ref(), Role::ActivePool)?;
     let ultra_token_addr = ROLE_CONSUMER.load_role_address(deps.as_ref(), Role::UltraToken)?;
+    let sorted_troves_addr = ROLE_CONSUMER.load_role_address(deps.as_ref(), Role::SortedTroves)?;
     if max_fee_percentage >= Decimal256::permille(5) &&  max_fee_percentage <= Decimal256::one() {
         return Err(ContractError::MaxFeePercentageInvalid {  })
     }
 
+    let manager = MANAGER.load(deps.storage)?;
     // TODO: Fix some related to LQTY token and bootstrap
 
     let price: Decimal = deps.querier
@@ -233,13 +241,115 @@ pub fn execute_redeem_collateral(
     }
 
     totals.remaining_ultra_debt = ultra_amount;
-    let currentBorrower: Addr;
+    let mut current_borrower: Option<Addr>;
+
+    if is_valid_first_redemption_hint(
+        deps.as_ref(), 
+        sorted_troves_addr.clone(), 
+        first_redemption_hint.clone(), 
+        price)? {
+        current_borrower = first_redemption_hint.clone();
+    } else {
+        current_borrower = deps.querier
+            .query_wasm_smart(
+                sorted_troves_addr.to_string(), 
+                &ultra_base::sorted_troves::QueryMsg::GetLast {  } 
+            )?;
+        // Find the first trove with ICR >= MCR
+        while current_borrower.clone().is_some() 
+            && get_current_icr(deps.as_ref(), current_borrower.clone().unwrap().to_string(), price)? < MCR {
+            
+            current_borrower = deps.querier
+                .query_wasm_smart(
+                    sorted_troves_addr.to_string(), 
+                    &ultra_base::sorted_troves::QueryMsg::GetPrev { 
+                        id: current_borrower.unwrap().to_string()
+                    } 
+                )?;
+        }
+    }
+
+    let mut max_iterations = max_iterations;
+    let mut cosmos_msgs = vec![];
+    let querier = deps.querier; 
+    // Loop through the Troves starting from the one with lowest collateral ratio until _amount of LUSD is exchanged for collateral
+    while current_borrower.is_some() 
+        && totals.remaining_ultra_debt > Uint128::zero() 
+        && max_iterations > Uint128::zero() {
+        max_iterations = max_iterations.checked_sub(Uint128::one()).map_err(StdError::overflow)?;
+        
+        // Save the address of the Trove preceding the current one, before potentially modifying the list
+        let next_user_to_check = querier
+            .query_wasm_smart(
+                sorted_troves_addr.to_string(), 
+                &ultra_base::sorted_troves::QueryMsg::GetPrev { 
+                    id: current_borrower.clone().unwrap().to_string()
+                } 
+            )?;
+        
+        let msgs = apply_pending_rewards(
+            deps.branch(), 
+            env.clone(), 
+            info.clone(), 
+            current_borrower.clone().unwrap(), 
+            active_pool_addr.clone(),
+            default_pool_addr.clone())?;
+
+        for msg in msgs {
+            cosmos_msgs.push(msg);
+        }
+
+        // SingleRedemptionValues memory singleRedemption = _redeemCollateralFromTrove(
+        //     contractsCache,
+        //     currentBorrower,
+        //     totals.remainingLUSD,
+        //     totals.price,
+        //     _upperPartialRedemptionHint,
+        //     _lowerPartialRedemptionHint,
+        //     _partialRedemptionHintNICR
+        // );
+
+        // if (singleRedemption.cancelledPartial) break; // Partial redemption was cancelled (out-of-date hint, or new net debt < minimum), therefore we could not redeem from the last Trove
+
+        // totals.totalLUSDToRedeem  = totals.totalLUSDToRedeem.add(singleRedemption.LUSDLot);
+        // totals.totalETHDrawn = totals.totalETHDrawn.add(singleRedemption.ETHLot);
+
+        // totals.remainingLUSD = totals.remainingLUSD.sub(singleRedemption.LUSDLot);
+        current_borrower = next_user_to_check;
+    }
+
+    if totals.total_juno_drawn.is_zero() {
+        return Err(ContractError::UnableToRedeem {  });
+    }
+
+    // Decay the base_rate due to time passed, and then increase it according to the size of this redemption.
+    // Use the saved total UltraDebt supply value, from before it was reduced by the redemption.
+    update_base_rate_from_redeemtion(deps, env, totals.clone())?;
+
+    
+    // Calculate the juno fee
+    let total_juno_drawn = Decimal::new(totals.total_juno_drawn);
+    let redemption_fee = Decimal::min(
+        REDEMPTION_FEE_FLOOR
+            .checked_add(manager.base_rate)
+            .map_err(StdError::overflow)?, 
+        Decimal::one())
+        .checked_mul(total_juno_drawn)
+        .map_err(StdError::overflow)?;
+
+    if redemption_fee < total_juno_drawn {
+        return Err(ContractError::FeeEatUpAllReturns {  });
+    }
+    totals.juno_fee = redemption_fee.atomics()
+        .checked_div(Uint128::from(10u128).pow(18))
+        .map_err(StdError::divide_by_zero)?;
 
     let res = Response::new()
         .add_attribute("action", "redeem_collateral")
         .add_attribute("first_redemption_hint", format!("{:?}",first_redemption_hint.map(|addr| addr.to_string())))
         .add_attribute("upper_partial_redemption_hint", upper_partial_redemption_hint.to_string())
-        .add_attribute("lower_partial_redemption_hint", lower_partial_redemption_hint.to_string());
+        .add_attribute("lower_partial_redemption_hint", lower_partial_redemption_hint.to_string())
+        .add_messages(cosmos_msgs);
     Ok(res)
 }
 
@@ -514,25 +624,14 @@ pub fn execute_decay_base_rate_from_borrowing(
 
     let mut manager = MANAGER.load(deps.storage)?;
 
-    // Half-life of 12h. 12h = 720 min
-    // (1/2) = d^720 => d = (1/2)^(1/720)
-    // 18 digit of decimal places
-    let minute_decay_factor: Decimal256 = Decimal256::from_str("0.999037758833783388")?;
-    
-    let last_fee_operation_time = manager.last_fee_operation_time.nanos();
-    let base_rate = manager.base_rate;
-    
-    let time_pass : u64 = env.block.time.nanos() - last_fee_operation_time;
-    let minus_pass = time_pass / ONE_MINUTE;
-
-    // calculate new base rate
-    let decay_factor: Decimal256 = dec_pow(minute_decay_factor, minus_pass)?;
-    let decay_base_rate =  base_rate.saturating_mul(decay_factor);
-    if decay_base_rate > Decimal256::one() {
+    let decay_base_rate =  calc_decayed_base_rate(deps.as_ref(), env.clone())?;
+    if decay_base_rate > Decimal::one() {
         return Err(ContractError::DecayBaseRateLargerThanOne {})
     }
     manager.base_rate = decay_base_rate;
 
+    let last_fee_operation_time = manager.last_fee_operation_time.nanos();
+    let time_pass : u64 = env.block.time.nanos() - last_fee_operation_time;
     // Update last fee operation time 
     if time_pass >= ONE_MINUTE {
         manager.last_fee_operation_time = env.block.time;
@@ -866,15 +965,123 @@ fn move_pending_trove_rewards_to_active_pool(
     Ok(cosmos_msgs)
 }
 
+fn calc_decayed_base_rate(deps: Deps, env: Env) -> StdResult<Decimal>{
+    // Half-life of 12h. 12h = 720 min
+    // (1/2) = d^720 => d = (1/2)^(1/720)
+    // 18 digit of decimal places
+    let minute_decay_factor: Decimal = Decimal::from_str("0.999037758833783388")?;
+    
+    let manager = MANAGER.load(deps.storage)?;
+    let last_fee_operation_time = manager.last_fee_operation_time.nanos();
+    let base_rate = manager.base_rate;
+    
+    let time_pass : u64 = env.block.time.nanos() - last_fee_operation_time;
+    let minus_pass = time_pass / ONE_MINUTE;
+
+    // calculate new base rate
+    let decay_factor: Decimal = dec_pow(minute_decay_factor, minus_pass)?;
+    let decay_base_rate =  base_rate.saturating_mul(decay_factor);
+    Ok(decay_base_rate)
+}
+pub fn current_trove_amounts(deps: Deps, borrower_addr: Addr) -> Result<(Uint128, Uint128), StdError> {
+    let pending_juno_reward = get_pending_juno_reward(deps, borrower_addr.clone())?;
+    let pending_ultra_debt_reward = get_pending_ultra_debt_reward(deps, borrower_addr.clone())?;
+
+    let trove_idx = TROVE_OWNER_IDX.load(deps.storage, borrower_addr.clone())?;
+    let (_, trove) = TROVES.load(deps.storage, trove_idx.to_string())?;
+    
+    let current_juno = trove.coll
+        .checked_add(pending_juno_reward)
+        .map_err(StdError::overflow)?;
+    
+    let current_ultra_debt = trove.debt
+        .checked_add(pending_ultra_debt_reward)
+        .map_err(StdError::overflow)?;    
+    
+    return Ok((current_juno, current_ultra_debt));
+}
+
+fn update_base_rate_from_redeemtion(
+    deps: DepsMut, 
+    env: Env, 
+    totals: RedemptionTotals
+) -> Result<(), ContractError> {
+    let mut manager = MANAGER.load(deps.storage)?;
+    let decay_base_rate = calc_decayed_base_rate(deps.as_ref(), env.clone())?;
+    /* Convert the drawn ETH back to LUSD at face value rate (1 LUSD:1 USD), in order to get
+     * the fraction of total supply that was redeemed at face value. */
+    let redeemed_ultra_debt_fraction = Decimal::from_ratio(
+        totals.total_juno_drawn
+            .checked_mul(Decimal::atomics(&totals.price))
+            .map_err(StdError::overflow)?, 
+        totals.total_ultra_debt_supply_at_start
+            .checked_mul(Uint128::from(10u128).pow(18))
+            .map_err(StdError::overflow)?
+    );
+
+    let mut new_base_rate = Decimal::from_ratio(
+        Decimal::atomics(
+            &decay_base_rate
+                .checked_add(redeemed_ultra_debt_fraction)
+                .map_err(StdError::overflow)?
+        ),
+        Uint128::new(BETA as u128)
+    );
+    // cap baseRate at a maximum of 100%
+    new_base_rate = Decimal::min(new_base_rate, Decimal::one());
+    //assert(new_base_rate <= 1); // This is already enforced in the line above
+    if new_base_rate.is_zero() {
+        return  Err(ContractError::BaseRateIsZero {  });
+    }
+
+    // Update the base rate state variable
+    manager.base_rate = new_base_rate;
+
+    let last_fee_operation_time = manager.last_fee_operation_time.nanos();
+    let time_pass : u64 = env.block.time.nanos() - last_fee_operation_time;
+    // Update last fee operation time 
+    if time_pass >= ONE_MINUTE {
+        manager.last_fee_operation_time = env.block.time;
+    }
+
+    MANAGER.save(deps.storage, &manager)?;
+    Ok(())
+}
 pub fn is_valid_first_redemption_hint(
     deps: Deps, 
     sorted_troves_addr: Addr, 
     first_redemption_hint: Option<Addr>, 
     price: Decimal256
 ) -> StdResult<bool> { 
+    if first_redemption_hint.is_none() {
+        return Ok(false);
+    }
+    let first_redemption_hint = first_redemption_hint.unwrap();
+    let contains: bool = deps.querier
+        .query_wasm_smart(
+            sorted_troves_addr.to_string(), 
+            &ultra_base::sorted_troves::QueryMsg::Contains { 
+                id:  first_redemption_hint.to_string()
+            }
+        )?;
+    
+    let current_icr = get_current_icr(deps, first_redemption_hint.to_string(), price)?;
 
-    if first_redemption_hint.is_none() {}
-    Ok(false)
+    if !contains || current_icr < MCR {
+        return Ok(false);
+    }
+
+    let next_trove: Option<Addr> = deps.querier
+        .query_wasm_smart(
+            sorted_troves_addr.to_string(), 
+            &ultra_base::sorted_troves::QueryMsg::GetNext { 
+                id:  first_redemption_hint.to_string()
+            }
+        )?;
+    if next_trove.is_none() {
+        return Ok(false);
+    }
+    Ok( get_current_icr(deps, next_trove.unwrap().to_string(), price)? < MCR)
 }
 pub fn get_pending_juno_reward(deps: Deps, borrower_addr: Addr) -> StdResult<Uint128>{
     let trove_idx = TROVE_OWNER_IDX.load(deps.storage, borrower_addr.clone())?;
@@ -950,4 +1157,18 @@ pub fn get_tcr(deps: Deps, price: Decimal256, default_pool_addr: Addr, active_po
     };
 
     compute_cr(entire_system_coll, entire_system_debt, price)
+}
+
+pub fn get_current_icr(deps: Deps, borrower: String, price: Decimal256) -> StdResult<Decimal256>{
+    let borrower_addr = deps.api.addr_validate(&borrower)?;
+    let (current_juno, current_ultra_debt) = current_trove_amounts(deps, borrower_addr)?;
+
+    Ok(compute_cr(current_juno, current_ultra_debt, price)?)
+}
+
+pub fn get_current_nominal_icr(deps: Deps, borrower: String) -> StdResult<Decimal256>{
+    let borrower_addr = deps.api.addr_validate(&borrower)?;
+    let (current_juno, current_ultra_debt) = current_trove_amounts(deps, borrower_addr)?;
+
+    Ok(compute_nominal_cr(current_juno, current_ultra_debt)?)
 }

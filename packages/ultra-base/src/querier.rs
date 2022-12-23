@@ -5,7 +5,7 @@ use crate::ultra_math;
 
 use cosmwasm_std::{
     Addr, AllBalanceResponse, BankQuery, Coin, Decimal256, QuerierWrapper, QueryRequest, StdError,
-    StdResult, Uint128, Uint256,
+    StdResult, Uint128, Uint256, Decimal,
 };
 
 use cw20::{BalanceResponse as Cw20BalanceResponse, Cw20QueryMsg, TokenInfoResponse};
@@ -21,9 +21,14 @@ pub const CCR: Decimal256 = Decimal256::new(Uint256::from_u128(1_500_000_000_000
 // Minimum amount of net ULTRA debt a trove must have
 pub const MIN_NET_DEBT: Uint128 = Uint128::new(2000u128);
 
+pub const REDEMPTION_FEE_FLOOR: Decimal =  
+    Decimal::new(Uint128::new(5_000_000_000_000_000u128)); // 0.5%
+
 pub const BORROWING_FEE_FLOOR: Decimal256 =
     Decimal256::new(Uint256::from_u128(5_000_000_000_000_000u128)); // 0.5%
 
+pub const MAX_BORROWING_FEE: Decimal256 =
+    Decimal256::new(Uint256::from_u128(50_000_000_000_000_000u128)); // 5%
 /// Returns a native token's balance for a specific account.
 pub fn query_balance(
     querier: &QuerierWrapper,

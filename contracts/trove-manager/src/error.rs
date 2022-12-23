@@ -46,4 +46,16 @@ pub enum ContractError {
 
     #[error("TroveManager: Redeemer's balance over total UltraDebt supply")]
     BalanceOverSupply {},
+
+    #[error("TroveManager: Unable to redeem any amount")]
+    UnableToRedeem {},
+
+    #[error("TroveManager: Base rate is always non-zero after redemption")]
+    BaseRateIsZero {},
+
+    #[error("TroveManager: Fee would eat up all returned collateral")]
+    FeeEatUpAllReturns {},
+
+    #[error("TroveManager: Fee exceeded provided maximum")]
+    FeeIsNotAccepted {},
 }

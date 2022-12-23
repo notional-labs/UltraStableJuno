@@ -1,5 +1,5 @@
 
-use cosmwasm_std::{Addr, Uint128, Decimal256, Timestamp};
+use cosmwasm_std::{Addr, Uint128, Decimal256, Timestamp, Decimal};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -152,7 +152,7 @@ pub enum Status{
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 pub struct Manager {
     pub trove_owner_count: Uint128,
-    pub base_rate : Decimal256,
+    pub base_rate : Decimal,
     pub last_fee_operation_time : Timestamp,
     pub total_stake_snapshot: Uint128,
     pub total_collateral_snapshot: Uint128,
@@ -186,7 +186,7 @@ pub struct RedemptionTotals {
     pub juno_fee: Uint128,
     pub juno_to_send_to_redeemer: Uint128,
     pub decayed_base_rate: Uint128,
-    pub price: Uint128,
+    pub price: Decimal,
     pub total_ultra_debt_supply_at_start: Uint128,
 }
 
@@ -199,7 +199,7 @@ impl Default for RedemptionTotals{
             juno_fee: Uint128::zero(),
             juno_to_send_to_redeemer: Uint128::zero(),
             decayed_base_rate: Uint128::zero(),
-            price: Uint128::zero(),
+            price: Decimal::zero(),
             total_ultra_debt_supply_at_start: Uint128::zero(),
         }
     }

@@ -1,4 +1,4 @@
-use cosmwasm_std::{Decimal256, StdError, StdResult, Uint128, Uint256};
+use cosmwasm_std::{Decimal256, StdError, StdResult, Uint128, Uint256, Decimal};
 
 pub const NICR_PRECISION: u32 = 20; 
 pub const DECIMAL_PRECISION: u32 = 18;
@@ -75,13 +75,13 @@ pub fn compute_nominal_cr(coll: Uint128, debt: Uint128) -> StdResult<Decimal256>
     * In function 2), the difference in tokens issued at 1000 years and any time > 1000 years, will be negligible
     */
 
-pub fn dec_pow(base: Decimal256, minute: u64) -> StdResult<Decimal256> {
+pub fn dec_pow(base: Decimal, minute: u64) -> StdResult<Decimal> {
     let mut minute = if minute > 525600000 { 525600000 } else { minute };
     if minute == 0 { 
-        return Ok(Decimal256::one());
+        return Ok(Decimal::one());
     }
 
-    let mut y = Decimal256::raw(10u128.pow(DECIMAL_PRECISION as u32));
+    let mut y = Decimal::raw(10u128.pow(DECIMAL_PRECISION as u32));
     let mut x = base;
 
     while minute > 1 {
@@ -104,8 +104,8 @@ pub fn dec_pow(base: Decimal256, minute: u64) -> StdResult<Decimal256> {
     *
     * Used only inside the exponentiation, dec_pow().
     */
-pub fn round_mul(x: Decimal256, y: Decimal256) -> Decimal256 {
+pub fn round_mul(x: Decimal, y: Decimal) -> Decimal {
     x.saturating_mul(y)
-        .saturating_add(Decimal256::percent(50))
+        .saturating_add(Decimal::percent(50))
         .floor()
 }
