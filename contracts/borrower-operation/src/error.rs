@@ -1,10 +1,18 @@
 use cosmwasm_std::StdError;
 use thiserror::Error;
+use cw_controllers::AdminError;
+use ultra_controllers::roles::RolesError;
 
 #[derive(Error, Debug, PartialEq)]
 pub enum ContractError {
     #[error("{0}")]
     Std(#[from] StdError),
+
+    #[error("{0}")]
+    Admin(#[from] AdminError),
+    
+    #[error("{0}")]
+    UnauthorizedForRole(#[from] RolesError),
 
     #[error("UnauthorizedOwner")]
     UnauthorizedOwner {},
@@ -44,4 +52,7 @@ pub enum ContractError {
 
     #[error("BorrowerOperation:  Caller doesnt have enough Ultra to make repayment")]
     InsufficientUltra {}, 
+
+    #[error("BorrowerOperation:  Operation not permitted during Recovery Mod")]
+    RecoveryMode {}, 
 }

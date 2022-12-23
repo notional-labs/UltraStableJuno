@@ -13,8 +13,9 @@ use ultra_base::{active_pool, trove_manager, ultra_token};
 use crate::assert::{
     require_ICR_above_CCR, require_ICR_above_MCR, require_at_least_min_net_debt,
     require_newTCR_above_CCR, require_non_zero_adjustment, require_non_zero_debt_change,
-    require_singular_coll_change, require_sufficient_ultra_balance,
-    require_valid_new_ICR_and_valid_new_TCR, require_valid_ultra_repayment,
+    require_not_in_recovery_mode, require_singular_coll_change, require_sufficient_ultra_balance,
+    require_trove_is_active, require_valid_new_ICR_and_valid_new_TCR,
+    require_valid_ultra_repayment,
 };
 use crate::error::ContractError;
 use crate::state::{SudoParams, ADMIN, ROLE_CONSUMER, SUDO_PARAMS};
@@ -841,6 +842,107 @@ fn get_new_trove_amount(
     };
 
     Ok((new_coll, new_debt))
+}
+
+pub fn execute_close_trove(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+) -> Result<Response, ContractError> {
+    let mut attributes: Vec<Attribute> = vec![attr("action", "close_trove")];
+
+    require_trove_is_active(
+        deps.as_ref(),
+        ROLE_CONSUMER.load_role_address(deps.as_ref(), Role::TroveManager)?,
+        info.sender,
+    )?;
+    let price: Decimal256 = deps.querier.query_wasm_smart(
+        ROLE_CONSUMER
+            .load_role_address(deps.as_ref(), Role::PriceFeed)?
+            .to_string(),
+        &to_binary(&ultra_base::oracle::QueryMsg::ExchangeRate {
+            denom: "juno".to_string(), // TODO: hardcode.
+        })?,
+    )?;
+    let active_pool = ROLE_CONSUMER.load_role_address(deps.as_ref(), Role::ActivePool)?;
+    let default_pool = ROLE_CONSUMER.load_role_address(deps.as_ref(), Role::DefaultPool)?;
+    let trove_manager = ROLE_CONSUMER.load_role_address(deps.as_ref(), Role::TroveManager)?;
+    if !check_recovery_mode(&deps.querier, price, active_pool, default_pool)? {
+        return Err(ContractError::RecoveryMode {});
+    }
+
+    let mut messages: Vec<WasmMsg> = vec![];
+    messages.push(WasmMsg::Execute {
+        contract_addr: trove_manager.to_string(),
+        msg: to_binary(
+            &ultra_base::trove_manager::ExecuteMsg::ApplyPendingRewards {
+                borrower: info.sender.to_string(),
+            },
+        )?,
+        funds: vec![],
+    });
+
+    let coll: Uint128 = deps.querier.query_wasm_smart(
+        trove_manager,
+        &to_binary(&ultra_base::trove_manager::QueryMsg::GetTroveColl {})?,
+    )?;
+
+    let debt: Uint128 = deps.querier.query_wasm_smart(
+        trove_manager,
+        &to_binary(&ultra_base::trove_manager::QueryMsg::GetTroveDebt {})?,
+    )?;
+
+    // TODO: replace 50_000_000u128 -> ultra_gas_compensation
+    require_sufficient_ultra_balance(
+        deps.as_ref(),
+        info.sender.to_string(),
+        debt.checked_sub(Uint128::from(50_000_000u128))
+            .map_err(StdError::overflow)?,
+    )?;
+
+    messages.push(WasmMsg::Execute {
+        contract_addr: trove_manager.to_string(),
+        msg: to_binary(&ultra_base::trove_manager::ExecuteMsg::RemoveStake {
+            borrower: info.sender.to_string(),
+        })?,
+        funds: vec![],
+    });
+
+    messages.push(WasmMsg::Execute {
+        contract_addr: trove_manager.to_string(),
+        msg: to_binary(&ultra_base::trove_manager::ExecuteMsg::CloseTrove {
+            borrower: info.sender.to_string(),
+        })?,
+        funds: vec![],
+    });
+
+    messages.append(&mut repay_ultra_msgs(
+        deps.as_ref(),
+        info.sender.to_string(),
+        debt.checked_sub(Uint128::from(50_000_000u128))
+            .map_err(StdError::overflow)?,
+    )?);
+
+    // TODO: Add GasPool to ROLE_CONSUMER
+    messages.append(&mut repay_ultra_msgs(
+        deps.as_ref(),
+        ROLE_CONSUMER.load_role_address(deps.as_ref(), Role::GasPool)?,
+        debt.checked_sub(Uint128::from(50_000_000u128))
+            .map_err(StdError::overflow)?,
+    )?);
+
+    messages.push(WasmMsg::Execute {
+        contract_addr: active_pool.to_string(),
+        msg: to_binary(&ultra_base::active_pool::ExecuteMsg::SendJUNO {
+            recipient: info.sender,
+            amount: coll,
+        })?,
+        funds: vec![],
+    });
+
+    Ok(Response::new()
+        .add_attributes(attributes)
+        .add_messages(messages))
 }
 
 /// Checks to enfore only borrower o can call

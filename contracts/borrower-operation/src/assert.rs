@@ -3,7 +3,7 @@ use std::str::FromStr;
 use cosmwasm_std::{to_binary, Addr, Decimal256, Deps, StdError, Uint128};
 
 use crate::{state::ROLE_CONSUMER, ContractError};
-use ultra_base::role_provider::Role;
+use ultra_base::{role_provider::Role, querier::check_recovery_mode};
 
 // TODO: Verify logic behind ICR and CCR, MCR
 pub fn require_ICR_above_CCR(ICR: Decimal256) -> Result<(), ContractError> {
