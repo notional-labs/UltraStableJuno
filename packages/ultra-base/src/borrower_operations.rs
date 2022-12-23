@@ -19,8 +19,8 @@ pub enum ExecuteMsg {
     },
     /// Send JUNO as collateral to a trove
     AddColl {
-        upper_hint: Addr,
-        lower_hint: Addr,
+        upper_hint: String,
+        lower_hint: String,
     },
     /// Alongside a debt change, this function can perform either a collateral top-up or a collateral withdrawal.
     AdjustTrove {
@@ -37,9 +37,9 @@ pub enum ExecuteMsg {
     CloseTrove {},
     /// Send JUNO as collateral to a trove. Called by only the Stability Pool.
     MoveJUNOGainToTrove {
-        borrower: Addr,
-        upper_hint: Addr,
-        lower_hint: Addr,
+        borrower: String,
+        upper_hint: String,
+        lower_hint: String,
     },
     OpenTrove {
         max_fee_percentage: Decimal256,
@@ -47,27 +47,23 @@ pub enum ExecuteMsg {
         upper_hint: String,
         lower_hint: String,
     },
-    /// Burn the specified amount of ULTRA from `account` and decreases the total active debt
     RepayULTRA {
-        active_pool_addr: Addr,
-        ultra_token_addr: Addr,
-        account: Addr,
         ultra_amount: Uint128,
-        upper_hint: Addr,
-        lower_hint: Addr,
+        upper_hint: String,
+        lower_hint: String,
     },
     /// Withdraw JUNO collateral from a trove
     WithdrawColl {
         coll_amount: Uint128,
-        upper_hint: Addr,
-        lower_hint: Addr,
+        upper_hint: String,
+        lower_hint: String,
     },
     /// Withdraw ULTRA tokens from a trove: mint new ULTRA tokens to the owner, and increase the trove's debt accordingly
     WithdrawULTRA {
-        max_fee_percentage: Uint128,
+        max_fee_percentage: Decimal256,
         ultra_amount: Uint128,
-        upper_hint: Addr,
-        lower_hint: Addr,
+        upper_hint: String,
+        lower_hint: String,
     },
 }
 

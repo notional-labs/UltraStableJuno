@@ -140,3 +140,12 @@ pub fn require_valid_new_ICR_and_valid_new_TCR(
     }
     Ok(())
 }
+
+pub fn require_valid_maxFeePercentage(max_fee_percentage: Decimal256) -> Result<(), ContractError> {
+    if max_fee_percentage < Decimal256::from_atomics(5000000000000000u128, 18).unwrap()
+        || max_fee_percentage >= Decimal256::from_atomics(1000000000000000000u128, 18).unwrap()
+    {
+        return Err(ContractError::InvalidMaxFeePercentage {});
+    }
+    Ok(())
+}
