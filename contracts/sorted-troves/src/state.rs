@@ -1,4 +1,4 @@
-use cosmwasm_std::{Addr, Uint256};
+use cosmwasm_std::{Addr, Uint256, Uint128};
 use cw_controllers::Admin;
 use cw_storage_plus::{Item, Map};
 use schemars::JsonSchema;
@@ -15,8 +15,8 @@ pub struct SudoParams {
 pub struct Data {
     pub head: Option<Addr>,
     pub tail: Option<Addr>,
-    pub max_size: Uint256,
-    pub size: Uint256
+    pub max_size: Uint128,
+    pub size: Uint128
 }
 
 impl Data {
@@ -25,7 +25,7 @@ impl Data {
     }
 
     pub fn is_empty(&self) -> bool {
-        return self.size == Uint256::zero()
+        return self.size == Uint128::zero()
     }
 }
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]

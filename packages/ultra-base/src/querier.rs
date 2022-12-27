@@ -13,22 +13,27 @@ use cw20::{BalanceResponse as Cw20BalanceResponse, Cw20QueryMsg, TokenInfoRespon
 const NATIVE_TOKEN_PRECISION: u8 = 6;
 
 // Minimum collateral ratio for individual troves
-pub const MCR: Decimal256 = Decimal256::new(Uint256::from_u128(1_100_000_000_000_000_000u128));
+pub const MCR: Decimal = Decimal::new(Uint128::new(1_100_000_000_000_000_000u128));
 
 // Critical system collateral ratio. If the system's total collateral ratio (TCR) falls below the CCR, Recovery Mode is triggered.
-pub const CCR: Decimal256 = Decimal256::new(Uint256::from_u128(1_500_000_000_000_000_000u128));
+pub const CCR: Decimal = Decimal::new(Uint128::new(1_500_000_000_000_000_000u128));
 
 // Minimum amount of net ULTRA debt a trove must have
 pub const MIN_NET_DEBT: Uint128 = Uint128::new(2000u128);
 
+// Amount of Ultra to be locked in gas pool on opening troves
+pub const ULTRA_GAS_COMPENSATE : Uint128 = Uint128::new(50);
+
 pub const REDEMPTION_FEE_FLOOR: Decimal =  
     Decimal::new(Uint128::new(5_000_000_000_000_000u128)); // 0.5%
 
-pub const BORROWING_FEE_FLOOR: Decimal256 =
-    Decimal256::new(Uint256::from_u128(5_000_000_000_000_000u128)); // 0.5%
+pub const BORROWING_FEE_FLOOR: Decimal =
+    Decimal::new(Uint128::new(5_000_000_000_000_000u128)); // 0.5%
 
-pub const MAX_BORROWING_FEE: Decimal256 =
-    Decimal256::new(Uint256::from_u128(50_000_000_000_000_000u128)); // 5%
+pub const MAX_BORROWING_FEE: Decimal =
+    Decimal::new(Uint128::new(50_000_000_000_000_000u128)); // 5%
+
+pub const PERCENT_DIVISOR: u8 = 200;
 /// Returns a native token's balance for a specific account.
 pub fn query_balance(
     querier: &QuerierWrapper,
@@ -140,10 +145,10 @@ pub fn query_entire_system_debt(
 
 pub fn get_tcr(
     querier: &QuerierWrapper,
-    price: Decimal256,
+    price: Decimal,
     active_pool_addr: Addr,
     default_pool_addr: Addr,
-) -> StdResult<Decimal256> {
+) -> StdResult<Decimal> {
     let entire_system_coll =
         query_entire_system_debt(querier, active_pool_addr.clone(), default_pool_addr.clone())
             .unwrap();
@@ -155,7 +160,7 @@ pub fn get_tcr(
 
 pub fn check_recovery_mode(
     querier: &QuerierWrapper,
-    price: Decimal256,
+    price: Decimal,
     active_pool_addr: Addr,
     default_pool_addr: Addr,
 ) -> bool {

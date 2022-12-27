@@ -1,7 +1,7 @@
 
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{DepsMut, Env, MessageInfo, Response, Addr,Uint256, Deps, Binary, StdResult, to_binary};
+use cosmwasm_std::{DepsMut, Env, MessageInfo, Response, Addr,Uint256, Deps, Binary, StdResult, to_binary, Uint128};
 
 use cw2::set_contract_version;
 use cw_utils::maybe_addr;
@@ -37,8 +37,8 @@ pub fn instantiate(
     DATA.save(deps.storage, &Data { 
         head: None, 
         tail: None, 
-        max_size: Uint256::zero(), 
-        size: Uint256::zero()})?;
+        max_size: Uint128::zero(), 
+        size: Uint128::zero()})?;
     Ok(Response::default())
 }
 
@@ -92,7 +92,7 @@ pub fn execute_insert(
     _env: Env, 
     info: MessageInfo, 
     id: String,
-    nicr: Uint256,
+    nicr: Uint128,
     prev_id: Option<String>,
     next_id: Option<String>,
 ) -> Result<Response, ContractError> {
@@ -200,7 +200,7 @@ pub fn execute_insert(
         })?;
     }
 
-    data.size += Uint256::from_u128(1u128);
+    data.size += Uint128::one();
     DATA.save(deps.storage, &data)?;
 
     let res = Response::new()
@@ -229,7 +229,7 @@ pub fn execute_remove(
         return Err(ContractError::ListNotContainId {})
     }
 
-    if data.size > Uint256::from_u128(1u128) {
+    if data.size > Uint128::one() {
         // List contains more than a single node
         if data.head == Some(id_addr.clone()) {
             // The removed node is the head
@@ -304,7 +304,7 @@ pub fn execute_remove(
     }
 
     NODES.remove(deps.storage, id_addr);
-    data.size -= Uint256::from_u128(1u128);
+    data.size -= Uint128::from(1u128);
     DATA.save(deps.storage, &data)?;
     let res = Response::new()
         .add_attribute("action", "remove")
@@ -317,7 +317,7 @@ pub fn execute_reinsert(
     env: Env, 
     info: MessageInfo, 
     id: String,
-    new_nicr: Uint256,
+    new_nicr: Uint128,
     prev_id: Option<String>,
     next_id: Option<String>,
 ) -> Result<Response, ContractError> {
@@ -341,7 +341,7 @@ pub fn execute_set_params(
     deps: DepsMut, 
     _env: Env, 
     _info: MessageInfo, 
-    size: Uint256
+    size: Uint128
 ) -> Result<Response, ContractError> {
     if size.is_zero() {
         return Err(ContractError::SizeIsZero {  })
@@ -406,12 +406,12 @@ pub fn query_data(deps: Deps) -> StdResult<Data> {
     Ok(data)
 }
 
-pub fn query_size(deps: Deps) -> StdResult<Uint256> {
+pub fn query_size(deps: Deps) -> StdResult<Uint128> {
     let data = DATA.load(deps.storage)?;
     Ok(data.size)
 }
 
-pub fn query_max_size(deps: Deps) -> StdResult<Uint256> {
+pub fn query_max_size(deps: Deps) -> StdResult<Uint128> {
     let data = DATA.load(deps.storage)?;
     Ok(data.max_size)
 }

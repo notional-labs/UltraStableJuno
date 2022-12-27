@@ -1,4 +1,4 @@
-use cosmwasm_std::{Addr, Uint256};
+use cosmwasm_std::{Addr, Uint256, Uint128};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 pub struct InstantiateMsg {
     pub name: String,
     pub owner: String,
-    pub max_size: Uint256
+    pub max_size: Uint128
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -20,13 +20,13 @@ pub enum ExecuteMsg {
     },
     Insert {
         id: String,
-        nicr: Uint256,
+        nicr: Uint128,
         prev_id: Option<String>,
         next_id: Option<String>,
     },
     ReInsert {
         id: String,
-        new_nicr: Uint256,
+        new_nicr: Uint128,
         prev_id: Option<String>,
         next_id: Option<String>,
     },
@@ -34,7 +34,7 @@ pub enum ExecuteMsg {
         id: String,
     },
     SetParams {
-        size: Uint256,
+        size: Uint128,
     },
 }
 
@@ -56,12 +56,12 @@ pub enum QueryMsg {
         id: String,
     },
     FindInsertPosition {
-        nicr: Uint256,
+        nicr: Uint128,
         prev_id: String,
         next_id: String,
     },
     ValidInsertPosition {
-        nicr: Uint256,
+        nicr: Uint128,
         prev_id: String,
         next_id: String,
     },

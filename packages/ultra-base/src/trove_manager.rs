@@ -1,5 +1,5 @@
 
-use cosmwasm_std::{Addr, Uint128, Decimal256, Timestamp, Decimal};
+use cosmwasm_std::{Addr, Uint128, Decimal256, Timestamp, Decimal, Uint256};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -25,13 +25,15 @@ pub enum ExecuteMsg {
     Liquidate {
         borrower: String,
     },
-    // // Liquidate a sequence of troves. Closes a maximum number of n under-collateralized Troves,
-    // // starting from the one with the lowest collateral ratio in the system, and moving upwards
-    // LiquidateTroves {
-    //     n: Uint128,
-    // },
-    // // Attempt to liquidate a custom list of troves provided by the caller.
-    // BatchLiquidateTroves {},
+    // Liquidate a sequence of troves. Closes a maximum number of n under-collateralized Troves,
+    // starting from the one with the lowest collateral ratio in the system, and moving upwards
+    LiquidateTroves {
+        n: Uint128,
+    },
+    // Attempt to liquidate a custom list of troves provided by the caller.
+    BatchLiquidateTroves {
+        borrowers: Vec<String>,
+    },
     // Send ultra_amount $ULTRA to the system and redeem the corresponding amount of collateral from as many Troves
     // as are needed to fill the redemption request.
     RedeemCollateral {
@@ -39,8 +41,9 @@ pub enum ExecuteMsg {
         first_redemption_hint: Option<String>,
         upper_partial_redemption_hint: String,
         lower_partial_redemption_hint: String,
+        partial_redemption_hint_nicr: Decimal,
         max_iterations: Uint128,
-        max_fee_percentage: Decimal256,
+        max_fee_percentage: Decimal,
     },
     // Add the borrowers's coll and debt rewards earned from redistributions, to their Trove
     ApplyPendingRewards {
@@ -159,6 +162,8 @@ pub struct Manager {
     pub total_stake: Uint128,
     pub total_liquidation_juno: Uint128,
     pub total_liquidation_ultra_debt: Uint128,
+    pub last_juno_error_redistribution: Uint128,
+    pub last_ultra_debt_error_redistribution: Uint128
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
@@ -209,4 +214,102 @@ pub struct SingleRedemptionValues {
     pub ultra_debt_lot: Uint128,
     pub juno_lot: Uint128,
     pub cancelled_partial: bool
+}
+
+impl Default for SingleRedemptionValues{
+    fn default() -> Self{
+        Self {
+            ultra_debt_lot: Uint128::zero(),
+            juno_lot: Uint128::zero(),
+            cancelled_partial: false
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct LiquidationTotals {
+    pub total_coll_in_sequence: Uint128,
+    pub total_debt_in_sequence: Uint128,
+    pub total_coll_gas_compensation: Uint128,
+    pub total_ultra_gas_compensation: Uint128,
+    pub total_debt_to_offset: Uint128,
+    pub total_coll_to_send_to_sp: Uint128,
+    pub total_debt_to_redistribute: Uint128,
+    pub total_coll_to_redistribute: Uint128,
+    pub total_coll_surplus: Uint128,
+}
+
+impl Default for LiquidationTotals {
+    fn default() -> Self {
+        Self { 
+            total_coll_in_sequence: Uint128::zero(), 
+            total_debt_in_sequence: Uint128::zero(),
+            total_coll_gas_compensation: Uint128::zero(), 
+            total_ultra_gas_compensation: Uint128::zero(), 
+            total_debt_to_offset: Uint128::zero(), 
+            total_coll_to_send_to_sp: Uint128::zero(), 
+            total_debt_to_redistribute: Uint128::zero(), 
+            total_coll_to_redistribute: Uint128::zero(), 
+            total_coll_surplus: Uint128::zero() 
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct LiquidationValues {
+    pub entire_trove_debt: Uint128,
+    pub entire_trove_coll: Uint128,
+    pub coll_gas_compensation: Uint128,
+    pub ultra_gas_compensation: Uint128,
+    pub debt_to_offset: Uint128,
+    pub coll_to_send_to_sp: Uint128,
+    pub debt_to_redistribute: Uint128,
+    pub coll_to_redistribute: Uint128,
+    pub coll_surplus: Uint128,
+}
+
+impl Default for LiquidationValues {
+    fn default() -> Self {
+        Self { 
+            entire_trove_debt: Uint128::zero(), 
+            entire_trove_coll: Uint128::zero(),
+            coll_gas_compensation: Uint128::zero(), 
+            ultra_gas_compensation: Uint128::zero(), 
+            debt_to_offset: Uint128::zero(), 
+            coll_to_send_to_sp: Uint128::zero(), 
+            debt_to_redistribute: Uint128::zero(), 
+            coll_to_redistribute: Uint128::zero(), 
+            coll_surplus: Uint128::zero() 
+        }
+    }
+}
+
+// #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+// pub struct OuterLiquidationFunction{
+//     pub price: Decimal,
+//     pub ultra_in_stable_pool: Uint128,
+//     pub recovery_mode_at_start: bool,
+//     pub liquidate_debt: Uint128,
+//     pub liquidate_coll: Uint128,
+// }
+
+// impl Default for OuterLiquidationFunction {
+//     fn default() -> Self {
+//         Self {
+//             price: Decimal::zero(),
+//             ultra_in_stable_pool: Uint128::zero(),
+//             recovery_mode_at_start: false,
+//             liquidate_debt: Uint128::zero(),
+//             liquidate_coll: Uint128::zero()
+//         }
+//     }
+// }
+
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct EntireDebtAndCollResponse{
+    pub debt: Uint128,
+    pub coll: Uint128,
+    pub pending_ultra_debt_reward: Uint128,
+    pub pending_juno_reward: Uint128,
 }

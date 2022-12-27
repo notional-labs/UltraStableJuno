@@ -1,13 +1,13 @@
-use cosmwasm_std::{Decimal256, StdError, StdResult, Uint128, Uint256, Decimal};
+use cosmwasm_std::{StdError, StdResult, Uint128, Decimal};
 
 pub const NICR_PRECISION: u32 = 20; 
 pub const DECIMAL_PRECISION: u32 = 18;
 
-pub fn compute_cr(coll: Uint128, debt: Uint128, price: Decimal256) -> StdResult<Decimal256> {
-    if debt != Uint128::zero() {
-        let new_coll_ratio: Decimal256 = Decimal256::from_ratio(
-            Uint256::from_u128(coll.u128())
-                .checked_mul(Decimal256::atomics(&price))
+pub fn compute_cr(coll: Uint128, debt: Uint128, price: Decimal) -> StdResult<Decimal> {
+    if !debt.is_zero() {
+        let new_coll_ratio: Decimal = Decimal::from_ratio(
+            coll
+                .checked_mul(Decimal::atomics(&price))
                 .map_err(StdError::overflow)?, 
             debt
                 .checked_mul(Uint128::from(10u128).wrapping_pow(18))
@@ -15,7 +15,7 @@ pub fn compute_cr(coll: Uint128, debt: Uint128, price: Decimal256) -> StdResult<
             );   
         Ok(new_coll_ratio)
     } else {
-        Ok(Decimal256::MAX)
+        Ok(Decimal::MAX)
     }
 }
 
@@ -43,16 +43,16 @@ pub fn compute_cr(coll: Uint128, debt: Uint128, price: Decimal256) -> StdResult<
 //     }
 //     Ok(Decimal256::MAX)
 // }
-pub fn compute_nominal_cr(coll: Uint128, debt: Uint128) -> StdResult<Decimal256> {
-    if debt != Uint128::zero() {
-        let nomial_coll_ratio: Decimal256 = Decimal256::from_ratio(
-            Uint256::from_u128(coll.u128())
-            .checked_mul(Uint256::from(10u128).wrapping_pow(NICR_PRECISION))
+pub fn compute_nominal_cr(coll: Uint128, debt: Uint128) -> StdResult<Decimal> {
+    if !debt.is_zero() {
+        let nomial_coll_ratio: Decimal = Decimal::from_ratio(
+            coll
+            .checked_mul(Uint128::from(10u128).wrapping_pow(NICR_PRECISION))
             .map_err(StdError::overflow)?, 
             debt);
         Ok(nomial_coll_ratio)
     } else {
-        Ok(Decimal256::MAX)
+        Ok(Decimal::MAX)
     }
 }
 

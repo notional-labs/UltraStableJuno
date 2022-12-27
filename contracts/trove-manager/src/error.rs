@@ -58,4 +58,10 @@ pub enum ContractError {
 
     #[error("TroveManager: Fee exceeded provided maximum")]
     FeeIsNotAccepted {},
+
+    #[error("TroveManager: Remain Ultra In Stability Pool is zero")]
+    RemainUltraInStabilityPoolIsZero {},
+
+    #[error("TroveManager: nothing to liquidate")]
+    NothingToLiquidate {},
 }

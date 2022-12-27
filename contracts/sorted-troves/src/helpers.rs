@@ -1,11 +1,11 @@
-use cosmwasm_std::{Deps, Addr, Uint256, StdResult, StdError};
+use cosmwasm_std::{Deps, Addr, Uint256, StdResult, StdError, Uint128};
 use ultra_base::role_provider::Role;
 
 use crate::{ContractError, state::{DATA, ROLE_CONSUMER, NODES}};
 
 pub fn validate_insert_position(
     deps: Deps, 
-    nicr: Uint256, 
+    nicr: Uint128, 
     prev_id: Option<Addr>, 
     next_id: Option<Addr>
 ) -> StdResult<bool> {
@@ -15,7 +15,7 @@ pub fn validate_insert_position(
         return Ok(data.is_empty() )
     } else if prev_id.is_none() {
         // `next_id` is the head of the list
-        let next_id_nicr: Uint256 = deps.querier.query_wasm_smart(
+        let next_id_nicr: Uint128 = deps.querier.query_wasm_smart(
             trove_manager,
             &ultra_base::trove_manager::QueryMsg::GetNominalICR { 
                 borrower:  next_id.clone().unwrap().to_string()
@@ -24,7 +24,7 @@ pub fn validate_insert_position(
         return Ok(data.head == next_id && nicr >= next_id_nicr)
     } else if next_id.is_none() {
         // `prev_id` is the tail of the list
-        let prev_id_nicr: Uint256 = deps.querier.query_wasm_smart(
+        let prev_id_nicr: Uint128 = deps.querier.query_wasm_smart(
             trove_manager,
             &ultra_base::trove_manager::QueryMsg::GetNominalICR { 
                 borrower:  prev_id.clone().unwrap().to_string()
@@ -34,13 +34,13 @@ pub fn validate_insert_position(
     } else {
         let prev_id = prev_id.unwrap();
         let next_id = next_id.unwrap();
-        let prev_id_nicr: Uint256 = deps.querier.query_wasm_smart(
+        let prev_id_nicr: Uint128 = deps.querier.query_wasm_smart(
             trove_manager.clone(),
             &ultra_base::trove_manager::QueryMsg::GetNominalICR { 
                 borrower:  prev_id.to_string()
             }
         )?;
-        let next_id_nicr: Uint256 = deps.querier.query_wasm_smart(
+        let next_id_nicr: Uint128 = deps.querier.query_wasm_smart(
             trove_manager,
             &ultra_base::trove_manager::QueryMsg::GetNominalICR { 
                 borrower:  next_id.to_string()
@@ -57,7 +57,7 @@ pub fn validate_insert_position(
 
 pub fn find_insert_position(
     deps: Deps, 
-    nicr: Uint256, 
+    nicr: Uint128, 
     prev_id: Option<Addr>, 
     next_id: Option<Addr>
 ) -> StdResult<(Option<Addr>, Option<Addr>)>{
@@ -67,7 +67,7 @@ pub fn find_insert_position(
     let mut prev_id = prev_id;
     let mut next_id = next_id;
     if prev_id.is_some() {
-        let prev_id_nicr: Uint256 = deps.querier.query_wasm_smart(
+        let prev_id_nicr: Uint128 = deps.querier.query_wasm_smart(
             trove_manager.clone(),
             &ultra_base::trove_manager::QueryMsg::GetNominalICR { 
                 borrower:  prev_id.clone().unwrap().to_string()
@@ -81,7 +81,7 @@ pub fn find_insert_position(
     } 
 
     if next_id.is_some() {
-        let next_id_nicr: Uint256 = deps.querier.query_wasm_smart(
+        let next_id_nicr: Uint128 = deps.querier.query_wasm_smart(
             trove_manager.clone(),
             &ultra_base::trove_manager::QueryMsg::GetNominalICR { 
                 borrower:  next_id.clone().unwrap().to_string()
@@ -110,13 +110,13 @@ pub fn find_insert_position(
     }
 }
 
-pub fn descend_list(deps: Deps, nicr: Uint256, start_id: Option<Addr>) -> StdResult<(Option<Addr>, Option<Addr>)>{
+pub fn descend_list(deps: Deps, nicr: Uint128, start_id: Option<Addr>) -> StdResult<(Option<Addr>, Option<Addr>)>{
     let data = DATA.load(deps.storage)?;
     let trove_manager = ROLE_CONSUMER.load_role_address(deps, Role::TroveManager)?;
     if start_id.is_none() {
         return Err(StdError::parse_err("Addr", "SortedTroves: Start id shouldn't be none") )
     }
-    let start_id_nicr: Uint256 = deps.querier.query_wasm_smart(
+    let start_id_nicr: Uint128 = deps.querier.query_wasm_smart(
         trove_manager.clone(),
         &ultra_base::trove_manager::QueryMsg::GetNominalICR { 
             borrower:  start_id.clone().unwrap().to_string()
@@ -138,13 +138,13 @@ pub fn descend_list(deps: Deps, nicr: Uint256, start_id: Option<Addr>) -> StdRes
     Ok((prev_id, next_id))
 }
 
-pub fn ascend_list(deps: Deps, nicr: Uint256, start_id: Option<Addr>) -> StdResult<(Option<Addr>, Option<Addr>)>{
+pub fn ascend_list(deps: Deps, nicr: Uint128, start_id: Option<Addr>) -> StdResult<(Option<Addr>, Option<Addr>)>{
     let data = DATA.load(deps.storage)?;
     let trove_manager = ROLE_CONSUMER.load_role_address(deps, Role::TroveManager)?;
     if start_id.is_none() {
         return Err(StdError::parse_err("Addr", "SortedTroves: Start id shouldn't be none") )
     }
-    let start_id_nicr: Uint256 = deps.querier.query_wasm_smart(
+    let start_id_nicr: Uint128 = deps.querier.query_wasm_smart(
         trove_manager.clone(),
         &ultra_base::trove_manager::QueryMsg::GetNominalICR { 
             borrower:  start_id.clone().unwrap().to_string()

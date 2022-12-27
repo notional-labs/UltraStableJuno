@@ -9,14 +9,13 @@ use cw2::set_contract_version;
 use cw20::BalanceResponse;
 use cw_utils::maybe_addr;
 
-use ultra_base::querier::{MCR, REDEMPTION_FEE_FLOOR};
+use ultra_base::querier::{MCR, REDEMPTION_FEE_FLOOR, ULTRA_GAS_COMPENSATE, MIN_NET_DEBT, check_recovery_mode, get_tcr, query_entire_system_debt, query_entire_system_coll, PERCENT_DIVISOR, CCR};
 use ultra_base::role_provider::Role;
-use ultra_base::sorted_troves;
 use ultra_base::ultra_math::{dec_pow, compute_cr, compute_nominal_cr};
 
 use crate::error::ContractError;
 use crate::state::{SudoParams, SUDO_PARAMS, ADMIN, ROLE_CONSUMER, MANAGER, TROVES, SNAPSHOTS, TROVE_OWNER_IDX};
-use ultra_base::trove_manager::{InstantiateMsg, ExecuteMsg, QueryMsg, Status, Trove, Manager, RewardSnapshot, RedemptionTotals};
+use ultra_base::trove_manager::{InstantiateMsg, ExecuteMsg, QueryMsg, Status, Trove, Manager, RewardSnapshot, RedemptionTotals, SingleRedemptionValues, LiquidationTotals, LiquidationValues, EntireDebtAndCollResponse};
 
 
 // version info for migration info
@@ -60,6 +59,8 @@ pub fn instantiate(
             total_stake: Uint128::zero(),
             total_liquidation_juno: Uint128::zero(),
             total_liquidation_ultra_debt: Uint128::zero(),
+            last_juno_error_redistribution: Uint128::zero(),
+            last_ultra_debt_error_redistribution: Uint128::zero()
         })?;
     Ok(Response::default())
 }
@@ -81,11 +82,18 @@ pub fn execute(
         ExecuteMsg::Liquidate { borrower } => {
             execute_liquidate(deps, env, info, borrower)
         },
+        ExecuteMsg::LiquidateTroves { n } => {
+            execute_liquidate_troves(deps, env, info, n)
+        },
+        ExecuteMsg::BatchLiquidateTroves { borrowers } => {
+            execute_batch_liquidate_troves(deps, env, info, borrowers)
+        },
         ExecuteMsg::RedeemCollateral { 
             ultra_amount, 
             first_redemption_hint, 
             upper_partial_redemption_hint, 
             lower_partial_redemption_hint, 
+            partial_redemption_hint_nicr,
             max_iterations, 
             max_fee_percentage 
         } => {
@@ -97,6 +105,7 @@ pub fn execute(
                 first_redemption_hint, 
                 upper_partial_redemption_hint, 
                 lower_partial_redemption_hint, 
+                partial_redemption_hint_nicr,
                 max_iterations, 
                 max_fee_percentage
             )
@@ -168,6 +177,198 @@ pub fn execute_liquidate(
     Ok(res)
 }
 
+pub fn execute_liquidate_troves(
+    deps: DepsMut, 
+    _env: Env, 
+    _info: MessageInfo, 
+    n: Uint128
+) -> Result<Response, ContractError> {
+
+    let res = Response::new()
+        .add_attribute("action", "liquidate");
+    Ok(res)
+}
+
+pub fn execute_batch_liquidate_troves(
+    mut deps: DepsMut, 
+    _env: Env, 
+    _info: MessageInfo, 
+    borrowers: Vec<String>
+) -> Result<Response, ContractError> {
+    // convert borrowers to addr
+    let api = deps.api;
+    let mut borrowers_addr: Vec<Addr> = vec![];
+    let mut cosmos_msg: Vec<CosmosMsg> = vec![];
+    for borrower in borrowers {
+        let borrower_addr = maybe_addr(api, Some(borrower))?;
+        if borrower_addr.is_some() {
+            borrowers_addr.push(borrower_addr.unwrap());
+        }
+    }
+
+    let oracle_addr = ROLE_CONSUMER.load_role_address(deps.as_ref(), Role::PriceFeed)?;
+    let stability_pool_addr = ROLE_CONSUMER.load_role_address(deps.as_ref(), Role::StabilityPool)?;
+    let active_pool_addr = ROLE_CONSUMER.load_role_address(deps.as_ref(), Role::ActivePool)?;
+    let default_pool_addr = ROLE_CONSUMER.load_role_address(deps.as_ref(), Role::DefaultPool)?;
+    let sorted_troves_addr = ROLE_CONSUMER.load_role_address(deps.as_ref(), Role::SortedTroves)?;
+
+    let mut totals = LiquidationTotals::default();
+    let price: Decimal = deps.querier
+        .query_wasm_smart(
+            oracle_addr, 
+            &ultra_base::oracle::QueryMsg::ExchangeRate { 
+                denom: ultra_base::oracle::NATIVE_JUNO_DENOM.to_string()
+            }
+        )?;
+    let ultra_in_stability_pool: Uint128 = deps.querier
+        .query_wasm_smart(
+            stability_pool_addr.clone(), 
+            &ultra_base::stability_pool::QueryMsg::GetTotalUltraDeposits {  }
+        )?;
+        
+    let recovery_mode_at_start = check_recovery_mode(
+        &deps.querier, 
+        price,
+        active_pool_addr.clone(),
+        default_pool_addr.clone()
+    );
+
+    // Perform the appropriate liquidation sequence - tally the values, and obtain their totals
+    // if recovery_mode_at_start {
+    //     totals = {
+    //         let single_liquidation = LiquidationValues::default();
+    //         let entirl_system_debt = query_entire_system_debt(
+    //             &deps.querier, 
+    //             active_pool_addr,
+    //             default_pool_addr)?;
+    //         let entire_system_coll = query_entire_system_coll(
+    //             &deps.querier, 
+    //             active_pool_addr,
+    //             default_pool_addr)?;
+            
+    //         let user: Option<Addr> = deps.querier
+    //             .query_wasm_smart(
+    //                 sorted_troves_addr, 
+    //                 &ultra_base::sorted_troves::QueryMsg::GetLast {  })?;
+    //         let first_user = deps.querier
+    //             .query_wasm_smart(
+    //                 sorted_troves_addr, 
+    //                 &ultra_base::sorted_troves::QueryMsg::GetFirst {  })?;
+    //         for _ in ..n{
+
+    //         }
+    //         false
+    //     }
+    // }
+    if recovery_mode_at_start {
+        let mut back_to_normal_mode = false;
+        let mut remain_ultra_in_stability_pool = ultra_in_stability_pool;
+        let mut single_liquidation;
+        let mut entire_system_debt = query_entire_system_debt(
+            &deps.querier, 
+            active_pool_addr.clone(),
+            default_pool_addr.clone())?;
+        let mut entire_system_coll = query_entire_system_coll(
+            &deps.querier, 
+            active_pool_addr.clone(),
+            default_pool_addr.clone())?;
+        let mut msg;
+        for borrower_addr in borrowers_addr {
+            let icr = get_current_icr(deps.as_ref(), borrower_addr.to_string(), price)?;
+            if !back_to_normal_mode{
+                // Skip this trove if ICR is greater than MCR and Stability Pool is empty
+                if icr >= MCR && remain_ultra_in_stability_pool.is_zero() { continue }
+        
+                let tcr = compute_cr(entire_system_coll, entire_system_debt, price)?;
+
+                
+                (single_liquidation, msg) = liquidate_recovery_mode(
+                    deps.branch(), 
+                    borrower_addr, 
+                    icr, 
+                    remain_ultra_in_stability_pool, 
+                    tcr, 
+                    price
+                )?;
+                if msg.is_some() {
+                    cosmos_msg.push(msg.unwrap());
+                }
+
+                // Update aggregate trackers
+                remain_ultra_in_stability_pool = remain_ultra_in_stability_pool
+                    .checked_sub(single_liquidation.debt_to_offset)
+                    .map_err(StdError::overflow)?;
+                entire_system_debt = entire_system_debt 
+                    .checked_sub(single_liquidation.debt_to_offset)
+                    .map_err(StdError::overflow)?;
+                entire_system_coll = entire_system_coll
+                    .checked_sub(single_liquidation.coll_to_send_to_sp)
+                    .map_err(StdError::overflow)?;
+
+                // Add liquidation values to their respective running totals
+                totals = add_liquidation_values_to_totals(totals, single_liquidation)?;
+
+                back_to_normal_mode = !(compute_cr(entire_system_coll, entire_system_debt, price)? < CCR)
+            } else if icr < MCR {
+                (single_liquidation, msg) = liquidate_normal_mode(
+                    deps.branch(), 
+                    borrower_addr, 
+                    remain_ultra_in_stability_pool, 
+                )?;
+                if msg.is_some() {
+                    cosmos_msg.push(msg.unwrap());
+                }
+
+                remain_ultra_in_stability_pool = remain_ultra_in_stability_pool
+                    .checked_sub(single_liquidation.debt_to_offset)
+                    .map_err(StdError::overflow)?;
+
+                // Add liquidation values to their respective running totals
+                totals = add_liquidation_values_to_totals(totals, single_liquidation)?;
+            } // In Normal Mode skip troves with ICR >= MCR
+        }
+    } else {
+        let mut msg;
+
+        let mut single_liquidation;
+        let mut remain_ultra_in_stability_pool = ultra_in_stability_pool;
+
+        for borrower_addr in borrowers_addr {
+            let icr = get_current_icr(deps.as_ref(), borrower_addr.to_string(), price)?;
+            if icr < MCR {
+                (single_liquidation, msg) = liquidate_normal_mode(
+                    deps.branch(), borrower_addr, remain_ultra_in_stability_pool)?;
+                if msg.is_some() {
+                    cosmos_msg.push(msg.unwrap());
+                }
+                remain_ultra_in_stability_pool = remain_ultra_in_stability_pool
+                    .checked_sub(single_liquidation.debt_to_offset)
+                    .map_err(StdError::overflow)?;
+                  
+                // Add liquidation values to their respective running totals
+                totals = add_liquidation_values_to_totals(totals, single_liquidation)?;
+            }
+        }
+    }
+
+    if totals.total_debt_in_sequence.is_zero() {
+        return Err(ContractError::NothingToLiquidate {  })
+    }
+
+    // Move liquidated ETH and LUSD to the appropriate pools
+    let offset_msg: CosmosMsg = WasmMsg::Execute { 
+        contract_addr: stability_pool_addr.to_string(), 
+        msg: to_binary(&ultra_base::stability_pool::ExecuteMsg::Offset {  })?, 
+        funds: vec![] 
+    }.into();
+    cosmos_msg.push(offset_msg);
+
+    let res = Response::new()
+        .add_attribute("action", "batch_liquidate_troves")
+        .add_messages(cosmos_msg);
+    Ok(res)
+}
+
 pub fn execute_redeem_collateral(
     mut deps: DepsMut, 
     env: Env, 
@@ -176,20 +377,20 @@ pub fn execute_redeem_collateral(
     first_redemption_hint: Option<String>,
     upper_partial_redemption_hint: String,
     lower_partial_redemption_hint: String,
+    partial_redemption_hint_nicr: Decimal,
     max_iterations: Uint128,
-    max_fee_percentage: Decimal256,
+    max_fee_percentage: Decimal,
 ) -> Result<Response, ContractError> {
     let api = deps.api;
     let first_redemption_hint = maybe_addr(api, first_redemption_hint)?;
-    let upper_partial_redemption_hint = deps.api.addr_validate(&upper_partial_redemption_hint)?;
-    let lower_partial_redemption_hint = deps.api.addr_validate(&lower_partial_redemption_hint)?;
 
     let oracle_addr = ROLE_CONSUMER.load_role_address(deps.as_ref(), Role::PriceFeed)?;
     let default_pool_addr = ROLE_CONSUMER.load_role_address(deps.as_ref(), Role::DefaultPool)?;
     let active_pool_addr = ROLE_CONSUMER.load_role_address(deps.as_ref(), Role::ActivePool)?;
     let ultra_token_addr = ROLE_CONSUMER.load_role_address(deps.as_ref(), Role::UltraToken)?;
     let sorted_troves_addr = ROLE_CONSUMER.load_role_address(deps.as_ref(), Role::SortedTroves)?;
-    if max_fee_percentage >= Decimal256::permille(5) &&  max_fee_percentage <= Decimal256::one() {
+    let surplus_pool_addr = ROLE_CONSUMER.load_role_address(deps.as_ref(), Role::CollateralSurplusPool)?;
+    if max_fee_percentage >= Decimal::permille(5) &&  max_fee_percentage <= Decimal::one() {
         return Err(ContractError::MaxFeePercentageInvalid {  })
     }
 
@@ -203,8 +404,7 @@ pub fn execute_redeem_collateral(
                 denom: ultra_base::oracle::NATIVE_JUNO_DENOM.to_string()
             }
         )?;
-    let price = Decimal256::from(price);
-    if get_tcr(deps.as_ref(), price, default_pool_addr.clone(), active_pool_addr.clone())? < MCR {
+    if get_tcr(&deps.querier, price, default_pool_addr.clone(), active_pool_addr.clone())? < MCR {
         return  Err(ContractError::TCRLessThanMCR {  });
     }
 
@@ -279,6 +479,7 @@ pub fn execute_redeem_collateral(
         max_iterations = max_iterations.checked_sub(Uint128::one()).map_err(StdError::overflow)?;
         
         // Save the address of the Trove preceding the current one, before potentially modifying the list
+        let sorted_troves_addr = sorted_troves_addr.clone();
         let next_user_to_check = querier
             .query_wasm_smart(
                 sorted_troves_addr.to_string(), 
@@ -299,22 +500,134 @@ pub fn execute_redeem_collateral(
             cosmos_msgs.push(msg);
         }
 
-        // SingleRedemptionValues memory singleRedemption = _redeemCollateralFromTrove(
-        //     contractsCache,
-        //     currentBorrower,
-        //     totals.remainingLUSD,
-        //     totals.price,
-        //     _upperPartialRedemptionHint,
-        //     _lowerPartialRedemptionHint,
-        //     _partialRedemptionHintNICR
-        // );
+        let mut single_redeemtion = SingleRedemptionValues::default();
+        let current_idx = TROVE_OWNER_IDX.load(deps.storage, current_borrower.clone().unwrap())?;
+        let mut current_trove = TROVES.load(deps.storage, current_idx.to_string())?.1;
 
-        // if (singleRedemption.cancelledPartial) break; // Partial redemption was cancelled (out-of-date hint, or new net debt < minimum), therefore we could not redeem from the last Trove
+        // Determine the remaining amount (lot) to be redeemed, capped by the entire debt of the Trove minus the gas compensation
+        single_redeemtion.ultra_debt_lot = Uint128::min(
+            totals.remaining_ultra_debt, 
+            current_trove.debt
+                .checked_sub(ULTRA_GAS_COMPENSATE)
+                .map_err(StdError::overflow)?
+        );
+        // Get the ETHLot of equivalent value in USD
+        single_redeemtion.juno_lot = single_redeemtion.ultra_debt_lot
+            .checked_mul(Uint128::new(10u128).pow(18))
+            .map_err(StdError::overflow)?
+            .checked_div(totals.price.atomics())
+            .map_err(StdError::divide_by_zero)?;
+        
+        // Decrease the debt and collateral of the current Trove according to the Ultra lot and corresponding Juno to send
+        let new_coll = current_trove.debt
+            .checked_sub(single_redeemtion.ultra_debt_lot)
+            .map_err(StdError::overflow)?;
+        let new_debt = current_trove.coll
+            .checked_sub(single_redeemtion.juno_lot)
+            .map_err(StdError::overflow)?;
+        
+        if new_debt == ULTRA_GAS_COMPENSATE {
+            // No debt left in the Trove (except for the gas compensation), therefore the trove gets closed
+            // TODO:
+            remove_stake(deps.branch(),  current_borrower.clone().unwrap())?;
+            close_trove(deps.branch(), current_borrower.clone().unwrap(), sorted_troves_addr)?;
+            
+             // TODO: update burn function
+            // let burn_msg: CosmosMsg = CosmosMsg::Wasm(
+            //     WasmMsg::Execute { 
+            //         contract_addr: ultra_token_addr.to_string(), 
+            //         msg: to_binary(&ultra_token::msg::ExecuteMsg::Burn { 
+            //             amount: totals.total_ultra_debt_to_redeem
+            //         })?,
+            //         funds: vec![] 
+            //     }
+            // );
+            // cosmos_msgs.push(burn_msg);
+            
+            // Update Active Pool Ultra, and send Juno to account
+            let decrease_ultra_debt_msg: CosmosMsg = CosmosMsg::Wasm(
+                    WasmMsg::Execute { 
+                        contract_addr: active_pool_addr.to_string(), 
+                        msg: to_binary(&ultra_base::active_pool::ExecuteMsg::DecreaseULTRADebt { 
+                            amount: ULTRA_GAS_COMPENSATE
+                        })?,
+                        funds: vec![] 
+                    }
+                );
+            cosmos_msgs.push(decrease_ultra_debt_msg);
 
-        // totals.totalLUSDToRedeem  = totals.totalLUSDToRedeem.add(singleRedemption.LUSDLot);
-        // totals.totalETHDrawn = totals.totalETHDrawn.add(singleRedemption.ETHLot);
+            // send Juno from Active Pool to CollSurplus Pool
+            let surplus_pool_addr = surplus_pool_addr.clone();
+            let account_surplus_msg: CosmosMsg = CosmosMsg::Wasm(
+                WasmMsg::Execute { 
+                    contract_addr: surplus_pool_addr.to_string(), 
+                    msg: to_binary(&ultra_base::coll_surplus_pool::ExecuteMsg::AccountSurplus { 
+                        account: current_borrower.clone().unwrap(), 
+                        amount: new_coll
+                    })?,
+                    funds: vec![] 
+                }
+            );
+            cosmos_msgs.push(account_surplus_msg);
+            let send_juno_msg: CosmosMsg = CosmosMsg::Wasm(
+                WasmMsg::Execute { 
+                    contract_addr: active_pool_addr.to_string(), 
+                    msg: to_binary(&ultra_base::active_pool::ExecuteMsg::SendJUNO { 
+                        recipient: surplus_pool_addr, 
+                        amount: new_coll
+                    })?,
+                    funds: vec![] 
+                }
+            );
+            cosmos_msgs.push(send_juno_msg); 
+        } else {
+            let new_nicr = compute_nominal_cr(new_coll, new_debt)?;
+            /*
+            * If the provided hint is out of date, we bail since trying to reinsert without a good hint will almost
+            * certainly result in running out of gas. 
+            *
+            * If the resultant net debt of the partial is less than the minimum, net debt we bail.
+            */
+            if new_nicr != partial_redemption_hint_nicr || 
+                new_debt.checked_sub(ULTRA_GAS_COMPENSATE)
+                    .map_err(StdError::overflow)? <= MIN_NET_DEBT {
+                        single_redeemtion.cancelled_partial = true;
+                        break;
+                    } else {
+                        let reinsert_msg: CosmosMsg = CosmosMsg::Wasm(
+                            WasmMsg::Execute { 
+                                contract_addr: sorted_troves_addr.to_string(), 
+                                msg: to_binary(&ultra_base::sorted_troves::ExecuteMsg::ReInsert { 
+                                    id: current_borrower.clone().unwrap().to_string(), 
+                                    new_nicr: new_nicr.atomics(), 
+                                    prev_id: Some(upper_partial_redemption_hint.clone()),
+                                    next_id: Some(lower_partial_redemption_hint.clone()) })?, 
+                                funds: vec![] 
+                            }
+                        );
+                        cosmos_msgs.push(reinsert_msg);
 
-        // totals.remainingLUSD = totals.remainingLUSD.sub(singleRedemption.LUSDLot);
+                        current_trove.debt = new_debt;
+                        current_trove.coll = new_coll;
+                        TROVES.save(deps.branch().storage, current_idx.to_string(), &(
+                            current_borrower.clone().unwrap(),
+                            current_trove
+                        ))?;
+
+                        update_stake_and_total_stakes(deps.branch(), current_borrower.clone().unwrap())?;
+                    }
+        }
+
+        totals.total_ultra_debt_to_redeem = totals.total_ultra_debt_to_redeem
+            .checked_add(single_redeemtion.ultra_debt_lot)
+            .map_err(StdError::overflow)?;
+        totals.total_juno_drawn = totals.total_juno_drawn
+            .checked_add(single_redeemtion.juno_lot)
+            .map_err(StdError::overflow)?;
+        totals.remaining_ultra_debt = totals.remaining_ultra_debt
+            .checked_sub(single_redeemtion.ultra_debt_lot)
+            .map_err(StdError::overflow)?;
+
         current_borrower = next_user_to_check;
     }
 
@@ -343,12 +656,61 @@ pub fn execute_redeem_collateral(
     totals.juno_fee = redemption_fee.atomics()
         .checked_div(Uint128::from(10u128).pow(18))
         .map_err(StdError::divide_by_zero)?;
+    
+    // require user accept fee
+    let fee_percentage = Decimal::from_ratio(
+        totals.juno_fee, 
+        totals.total_juno_drawn
+    );
+    if fee_percentage > max_fee_percentage {
+        return  Err(ContractError::FeeIsNotAccepted {  });
+    }
+    
+    // TODO: Fix some related to LQTY token and staking contracts
 
+    totals.juno_to_send_to_redeemer = totals.total_juno_drawn - totals.juno_fee;
+    
+    // Burn the total UltraDebt that is cancelled with debt, and send the redeemed Juno to info.sender
+    // TODO: update burn function
+    // let burn_msg: CosmosMsg = CosmosMsg::Wasm(
+    //     WasmMsg::Execute { 
+    //         contract_addr: ultra_token_addr.to_string(), 
+    //         msg: to_binary(&ultra_token::msg::ExecuteMsg::Burn { 
+    //             amount: totals.total_ultra_debt_to_redeem
+    //         })?,
+    //         funds: vec![] 
+    //     }
+    // );
+    // cosmos_msgs.push(burn_msg);
+    
+    // Update Active Pool, and send juno to info.sender
+    let decrease_debt_msg: CosmosMsg = CosmosMsg::Wasm(
+        WasmMsg::Execute {
+            contract_addr: active_pool_addr.to_string(),
+            msg: to_binary(&ultra_base::active_pool::ExecuteMsg::DecreaseULTRADebt { 
+                amount: totals.total_ultra_debt_to_redeem
+            })?,
+            funds: vec![]
+        }
+    );
+    cosmos_msgs.push(decrease_debt_msg);
+
+    let send_juno_msg: CosmosMsg = CosmosMsg::Wasm(
+        WasmMsg::Execute {
+            contract_addr: active_pool_addr.to_string(),
+            msg: to_binary(&ultra_base::active_pool::ExecuteMsg::SendJUNO { 
+                recipient: info.sender, 
+                amount: totals.juno_to_send_to_redeemer
+            })?,
+            funds: vec![]
+        }
+    );
+    cosmos_msgs.push(send_juno_msg);
     let res = Response::new()
         .add_attribute("action", "redeem_collateral")
         .add_attribute("first_redemption_hint", format!("{:?}",first_redemption_hint.map(|addr| addr.to_string())))
-        .add_attribute("upper_partial_redemption_hint", upper_partial_redemption_hint.to_string())
-        .add_attribute("lower_partial_redemption_hint", lower_partial_redemption_hint.to_string())
+        .add_attribute("upper_partial_redemption_hint", upper_partial_redemption_hint)
+        .add_attribute("lower_partial_redemption_hint", lower_partial_redemption_hint)
         .add_messages(cosmos_msgs);
     Ok(res)
 }
@@ -414,7 +776,7 @@ pub fn execute_update_trove_reward_snapshots(
 
 pub fn execute_remove_stake(
     deps: DepsMut, 
-    env: Env, 
+    _env: Env, 
     info: MessageInfo, 
     borrower: String
 ) -> Result<Response, ContractError> {
@@ -426,7 +788,7 @@ pub fn execute_remove_stake(
         )?;
 
     let borrower_addr = deps.api.addr_validate(&borrower)?;
-    remove_stake(deps, env, info, borrower_addr)?;
+    remove_stake(deps, borrower_addr)?;
     let res = Response::new()
         .add_attribute("action", "remove_stake")
         .add_attribute("borrower", borrower);
@@ -446,49 +808,14 @@ pub fn execute_update_stake_and_total_stakes(
             vec![Role::BorrowerOperations],
         )?;
 
-    let mut manager = MANAGER.load(deps.storage)?;
-
     let borrower_addr = deps.api.addr_validate(&borrower)?;
-    let trove_idx = TROVE_OWNER_IDX.load(deps.storage, borrower_addr)?;
-    let (trove_owner, mut trove) = TROVES.load(deps.storage, trove_idx.to_string())?; 
-    let new_stake: Uint128;
-
-    if manager.total_collateral_snapshot == Uint128::zero(){
-        new_stake = trove.coll;
-    } else {
-        /*
-            * The following assert holds true because:
-            * - The system always contains >= 1 trove
-            * - When we close or liquidate a trove, we redistribute the pending rewards, so if all troves were closed/liquidated,
-            * rewards would’ve been emptied and totalCollateralSnapshot would be zero too.
-            */
-        if manager.total_stake_snapshot == Uint128::zero() {
-            return Err(ContractError::TotalStakeSnapshotIsZero {  })
-        }
-
-        new_stake = trove.coll
-            .checked_mul(manager.total_stake_snapshot)
-            .map_err(StdError::overflow)?
-            .checked_div(manager.total_collateral_snapshot)
-            .map_err(StdError::divide_by_zero)?;
-    }
-
-    
-    manager.total_stake = manager.total_stake
-        .checked_sub(trove.stake)
-        .map_err(StdError::overflow)?
-        .checked_add(new_stake)
-        .map_err(StdError::overflow)?;
-    MANAGER.save(deps.storage, &manager)?;
-
-    trove.stake = new_stake;
-    TROVES.save(deps.storage, trove_idx.to_string(), &(trove_owner, trove))?;
+    let (new_stake, new_total_stake) = update_stake_and_total_stakes(deps, borrower_addr)?;
 
     let res = Response::new()
         .add_attribute("action", "update_stake_and_total_stakes")
         .add_attribute("borrower", borrower)
         .add_attribute("new_stake", new_stake.to_string())
-        .add_attribute("new_total_stake", manager.total_stake.to_string());
+        .add_attribute("new_total_stake", new_total_stake.to_string());
     Ok(res)
 }
 
@@ -506,45 +833,12 @@ pub fn execute_close_trove(
         )?;
 
     let borrower_addr = deps.api.addr_validate(&borrower)?;
-    let trove_count = MANAGER.load(deps.storage)?.trove_owner_count;
-
     let sorted_troves = ROLE_CONSUMER
         .load_role_address(
             deps.as_ref(), 
             Role::SortedTroves
     )?;
-    let size: Uint256 = deps
-        .querier
-        .query_wasm_smart(
-            sorted_troves.clone(), 
-            &ultra_base::sorted_troves::QueryMsg::GetSize {  })?;
-        
-    if trove_count <= Uint128::from(1u128) && size <= Uint256::from_u128(1u128) {
-        return Err(ContractError::OnlyOneTroveExist {});
-    }
-
-
-    // Remove trove by index
-    let trove_idx = TROVE_OWNER_IDX.load(deps.storage, borrower_addr.clone())?; 
-    let last_trove_idx = trove_count - Uint128::one();   
-
-    if trove_idx == last_trove_idx {
-        TROVE_OWNER_IDX.remove(deps.storage, borrower_addr.clone());
-        TROVES.remove(deps.storage, trove_idx.to_string());
-    } else {
-        let (last_trove_owner, last_trove) = TROVES.load(deps.storage, last_trove_idx.to_string())?; 
-    
-        TROVE_OWNER_IDX.remove(deps.storage, borrower_addr.clone());
-        TROVE_OWNER_IDX.save(deps.storage, last_trove_owner.clone(), &trove_idx)?;
-        TROVES.remove(deps.storage, last_trove_idx.to_string());
-        TROVES.save(deps.storage, last_trove_idx.to_string(), &(last_trove_owner, last_trove))?;
-    }
-
-    SNAPSHOTS.remove(deps.storage, borrower_addr.clone());
-    MANAGER.update(deps.storage, |mut manager | -> Result<Manager, ContractError>{
-        manager.trove_owner_count -= Uint128::one();
-        Ok(manager)
-    })?;
+    close_trove(deps, borrower_addr.clone(), sorted_troves.clone())?;
 
     let remove_borrower_msg: CosmosMsg = CosmosMsg::Wasm(
         WasmMsg::Execute{
@@ -826,10 +1120,92 @@ fn only_owner(store: &dyn Storage, info: &MessageInfo) -> Result<Addr, ContractE
     Ok(info.sender.clone())
 }
 
+fn update_stake_and_total_stakes(
+    deps: DepsMut,
+    borrower_addr: Addr
+) -> Result<(Uint128, Uint128), ContractError> {
+    let mut manager = MANAGER.load(deps.storage)?;
+
+    let trove_idx = TROVE_OWNER_IDX.load(deps.storage, borrower_addr)?;
+    let (trove_owner, mut trove) = TROVES.load(deps.storage, trove_idx.to_string())?; 
+    let new_stake: Uint128;
+
+    if manager.total_collateral_snapshot == Uint128::zero(){
+        new_stake = trove.coll;
+    } else {
+        /*
+            * The following assert holds true because:
+            * - The system always contains >= 1 trove
+            * - When we close or liquidate a trove, we redistribute the pending rewards, so if all troves were closed/liquidated,
+            * rewards would’ve been emptied and totalCollateralSnapshot would be zero too.
+            */
+        if manager.total_stake_snapshot == Uint128::zero() {
+            return Err(ContractError::TotalStakeSnapshotIsZero {  })
+        }
+
+        new_stake = trove.coll
+            .checked_mul(manager.total_stake_snapshot)
+            .map_err(StdError::overflow)?
+            .checked_div(manager.total_collateral_snapshot)
+            .map_err(StdError::divide_by_zero)?;
+    }
+
+    
+    manager.total_stake = manager.total_stake
+        .checked_sub(trove.stake)
+        .map_err(StdError::overflow)?
+        .checked_add(new_stake)
+        .map_err(StdError::overflow)?;
+    MANAGER.save(deps.storage, &manager)?;
+
+    trove.stake = new_stake;
+    TROVES.save(deps.storage, trove_idx.to_string(), &(trove_owner, trove))?;
+    Ok((new_stake, manager.total_stake))
+}
+
+fn close_trove(
+    deps: DepsMut, 
+    borrower_addr: Addr,
+    sorted_troves: Addr
+) -> Result<(), ContractError> {
+    let trove_count = MANAGER.load(deps.storage)?.trove_owner_count;
+
+    let size: Uint256 = deps
+        .querier
+        .query_wasm_smart(
+            sorted_troves.clone(), 
+            &ultra_base::sorted_troves::QueryMsg::GetSize {  })?;
+        
+    if trove_count <= Uint128::from(1u128) && size <= Uint256::from_u128(1u128) {
+        return Err(ContractError::OnlyOneTroveExist {});
+    }
+
+
+    // Remove trove by index
+    let trove_idx = TROVE_OWNER_IDX.load(deps.storage, borrower_addr.clone())?; 
+    let last_trove_idx = trove_count - Uint128::one();   
+
+    if trove_idx == last_trove_idx {
+        TROVE_OWNER_IDX.remove(deps.storage, borrower_addr.clone());
+        TROVES.remove(deps.storage, trove_idx.to_string());
+    } else {
+        let (last_trove_owner, last_trove) = TROVES.load(deps.storage, last_trove_idx.to_string())?; 
+    
+        TROVE_OWNER_IDX.remove(deps.storage, borrower_addr.clone());
+        TROVE_OWNER_IDX.save(deps.storage, last_trove_owner.clone(), &trove_idx)?;
+        TROVES.remove(deps.storage, last_trove_idx.to_string());
+        TROVES.save(deps.storage, last_trove_idx.to_string(), &(last_trove_owner, last_trove))?;
+    }
+
+    SNAPSHOTS.remove(deps.storage, borrower_addr.clone());
+    MANAGER.update(deps.storage, |mut manager | -> Result<Manager, ContractError>{
+        manager.trove_owner_count -= Uint128::one();
+        Ok(manager)
+    })?;
+    Ok(()) 
+}
 fn remove_stake(
     deps: DepsMut, 
-    _env: Env, 
-    _info: MessageInfo, 
     borrower_addr: Addr
 ) -> Result<(), ContractError> {
     let trove_idx = TROVE_OWNER_IDX.load(deps.storage, borrower_addr.clone())?;
@@ -1047,11 +1423,337 @@ fn update_base_rate_from_redeemtion(
     MANAGER.save(deps.storage, &manager)?;
     Ok(())
 }
+
+fn liquidate_recovery_mode(
+    mut deps: DepsMut,
+    user: Addr,
+    icr: Decimal,
+    remain_ultra_in_stability_pool: Uint128,
+    tcr: Decimal,
+    price: Decimal
+) -> Result<(LiquidationValues, Option<CosmosMsg>), ContractError>{
+    let manager = MANAGER.load(deps.storage)?;
+    let mut msg: Option<CosmosMsg> = None;
+
+    let mut single_liquidation = LiquidationValues::default();
+    if manager.trove_owner_count < Uint128::one() {
+        return Ok((single_liquidation, msg))
+    }
+
+    let active_pool_addr = ROLE_CONSUMER.load_role_address(deps.as_ref(), Role::ActivePool)?;
+    let default_pool_addr = ROLE_CONSUMER.load_role_address(deps.as_ref(), Role::DefaultPool)?;
+    let sorted_troves_addr = ROLE_CONSUMER.load_role_address(deps.as_ref(), Role::SortedTroves)?;
+    let coll_surplus_pool_addr = ROLE_CONSUMER.load_role_address(deps.as_ref(), Role::CollateralSurplusPool)?;
+
+    let entire_debt_and_coll = get_entire_debt_and_coll(deps.as_ref(), user.clone())?;
+    single_liquidation.entire_trove_debt = entire_debt_and_coll.debt;
+    single_liquidation.entire_trove_coll = entire_debt_and_coll.coll;
+    single_liquidation.coll_gas_compensation = single_liquidation.entire_trove_coll
+        .checked_div(Uint128::from(PERCENT_DIVISOR as u128))
+        .map_err(StdError::divide_by_zero)?;
+    single_liquidation.ultra_gas_compensation = ULTRA_GAS_COMPENSATE;
+    
+    let coll_to_liquidate = single_liquidation.entire_trove_coll
+        .checked_sub(single_liquidation.coll_gas_compensation)
+        .map_err(StdError::overflow)?;
+    
+    // If ICR <= 100%, purely redistribute the Trove across all active Troves
+    if icr <= Decimal::one(){
+        move_pending_trove_rewards_to_active_pool(
+            active_pool_addr, 
+            default_pool_addr, 
+            entire_debt_and_coll.pending_ultra_debt_reward, 
+            entire_debt_and_coll.pending_juno_reward)?;
+
+        remove_stake(deps.branch(), user.clone())?;
+
+        single_liquidation.debt_to_redistribute = single_liquidation.entire_trove_debt;
+        single_liquidation.coll_to_redistribute = coll_to_liquidate;
+
+        close_trove(deps.branch(), user.clone(), sorted_troves_addr)?;
+    }
+    // If 100% < ICR < MCR, offset as much as possible, and redistribute the remainder
+    else if icr < MCR {
+        move_pending_trove_rewards_to_active_pool(
+            active_pool_addr, 
+            default_pool_addr, 
+            entire_debt_and_coll.pending_ultra_debt_reward, 
+            entire_debt_and_coll.pending_juno_reward)?;
+
+        remove_stake(deps.branch(), user.clone())?;
+        
+        if remain_ultra_in_stability_pool.is_zero() {
+            single_liquidation.debt_to_redistribute = single_liquidation.entire_trove_debt;  
+            single_liquidation.coll_to_redistribute = coll_to_liquidate;
+        } else {
+            /*
+            * Offset as much debt & collateral as possible against the Stability Pool, and redistribute the remainder
+            * between all active troves.
+            *
+            *  If the trove's debt is larger than the deposited LUSD in the Stability Pool:
+            *
+            *  - Offset an amount of the trove's debt equal to the LUSD in the Stability Pool
+            *  - Send a fraction of the trove's collateral to the Stability Pool, equal to the fraction of its offset debt
+            *
+            */
+            single_liquidation.debt_to_offset = Uint128::min(
+                single_liquidation.entire_trove_debt, 
+                remain_ultra_in_stability_pool);
+            single_liquidation.coll_to_send_to_sp = coll_to_liquidate
+                .checked_mul(single_liquidation.debt_to_offset)
+                .map_err(StdError::overflow)?
+                .checked_div(single_liquidation.entire_trove_debt)
+                .map_err(StdError::divide_by_zero)?;
+            single_liquidation.debt_to_redistribute = single_liquidation.entire_trove_debt
+                .checked_sub(single_liquidation.debt_to_offset)
+                .map_err(StdError::overflow)?;  
+            single_liquidation.coll_to_redistribute = coll_to_liquidate
+                .checked_sub(single_liquidation.coll_to_send_to_sp)
+                .map_err(StdError::overflow)?;
+        }
+        close_trove(deps.branch(), user.clone(), sorted_troves_addr)?;
+    }
+    /*
+        * If 110% <= ICR < current TCR (accounting for the preceding liquidations in the current sequence)
+        * and there is LUSD in the Stability Pool, only offset, with no redistribution,
+        * but at a capped rate of 1.1 and only if the whole debt can be liquidated.
+        * The remainder due to the capped rate will be claimable as collateral surplus.
+        */
+    else if single_liquidation.entire_trove_debt <= remain_ultra_in_stability_pool
+        && icr < tcr {
+        move_pending_trove_rewards_to_active_pool(
+            active_pool_addr, 
+            default_pool_addr, 
+            entire_debt_and_coll.pending_ultra_debt_reward, 
+            entire_debt_and_coll.pending_juno_reward)?;
+        if remain_ultra_in_stability_pool.is_zero(){
+            return Err(ContractError::RemainUltraInStabilityPoolIsZero {  })
+        }
+        remove_stake(deps.branch(), user.clone())?;
+        single_liquidation = capped_offset_vals(
+            single_liquidation.entire_trove_debt, 
+            single_liquidation.entire_trove_coll, 
+            price)?;
+        close_trove(deps.branch(), user.clone(), sorted_troves_addr)?;
+        if single_liquidation.coll_surplus.is_zero() {
+            msg = Some(
+                WasmMsg::Execute { 
+                    contract_addr: coll_surplus_pool_addr.to_string(), 
+                    msg: to_binary(&ultra_base::coll_surplus_pool::ExecuteMsg::AccountSurplus { 
+                        account: user, 
+                        amount: single_liquidation.coll_surplus })?, 
+                    funds: vec![] }.into()
+            )
+        }
+    }
+    Ok((single_liquidation, msg))
+}
+
+fn liquidate_normal_mode(
+    mut deps: DepsMut,
+    user: Addr,
+    remain_ultra_in_stability_pool: Uint128
+)-> Result<(LiquidationValues, Option<CosmosMsg>), ContractError>{
+    let msg: Option<CosmosMsg> = None;
+
+    let active_pool_addr = ROLE_CONSUMER.load_role_address(deps.as_ref(), Role::ActivePool)?;
+    let default_pool_addr = ROLE_CONSUMER.load_role_address(deps.as_ref(), Role::DefaultPool)?;
+    let sorted_troves_addr = ROLE_CONSUMER.load_role_address(deps.as_ref(), Role::SortedTroves)?;
+
+    let mut single_liquidation = LiquidationValues::default();
+    let entire_debt_and_coll = get_entire_debt_and_coll(deps.as_ref(), user.clone())?;
+
+    // TODO: add msg to cosmos_msg
+    move_pending_trove_rewards_to_active_pool(
+        active_pool_addr, 
+        default_pool_addr, 
+        entire_debt_and_coll.pending_ultra_debt_reward, 
+        entire_debt_and_coll.pending_juno_reward)?;
+    remove_stake(deps.branch(), user.clone())?;
+
+    single_liquidation.coll_gas_compensation =  single_liquidation.entire_trove_coll
+        .checked_div(Uint128::from(PERCENT_DIVISOR as u128))
+        .map_err(StdError::divide_by_zero)?;
+    single_liquidation.ultra_gas_compensation = ULTRA_GAS_COMPENSATE;
+    let coll_to_liquidate = single_liquidation.entire_trove_coll
+        .checked_sub(single_liquidation.coll_gas_compensation)
+        .map_err(StdError::overflow)?;
+    
+    if remain_ultra_in_stability_pool.is_zero() {
+        single_liquidation.debt_to_redistribute = single_liquidation.entire_trove_debt;  
+        single_liquidation.coll_to_redistribute = coll_to_liquidate;
+    } else {
+        /*
+        * Offset as much debt & collateral as possible against the Stability Pool, and redistribute the remainder
+        * between all active troves.
+        *
+        *  If the trove's debt is larger than the deposited LUSD in the Stability Pool:
+        *
+        *  - Offset an amount of the trove's debt equal to the LUSD in the Stability Pool
+        *  - Send a fraction of the trove's collateral to the Stability Pool, equal to the fraction of its offset debt
+        *
+        */
+        single_liquidation.debt_to_offset = Uint128::min(
+            single_liquidation.entire_trove_debt, 
+            remain_ultra_in_stability_pool);
+        single_liquidation.coll_to_send_to_sp = coll_to_liquidate
+            .checked_mul(single_liquidation.debt_to_offset)
+            .map_err(StdError::overflow)?
+            .checked_div(single_liquidation.entire_trove_debt)
+            .map_err(StdError::divide_by_zero)?;
+        single_liquidation.debt_to_redistribute = single_liquidation.entire_trove_debt
+            .checked_sub(single_liquidation.debt_to_offset)
+            .map_err(StdError::overflow)?;  
+        single_liquidation.coll_to_redistribute = coll_to_liquidate
+            .checked_sub(single_liquidation.coll_to_send_to_sp)
+            .map_err(StdError::overflow)?;
+    }
+    close_trove(deps.branch(), user.clone(), sorted_troves_addr)?;
+    Ok((single_liquidation, msg))
+}
+fn capped_offset_vals(
+    entire_trove_debt: Uint128,
+    entire_trove_coll: Uint128,
+    price: Decimal
+) -> Result<LiquidationValues, ContractError> {
+    let mut single_liquidation = LiquidationValues::default();
+
+    single_liquidation.entire_trove_coll = entire_trove_coll;
+    single_liquidation.entire_trove_debt = entire_trove_debt;
+
+    let coll_to_offset = Decimal::from_ratio(
+        Decimal::from_ratio(
+            entire_trove_debt, 1u128)
+            .checked_mul(MCR)
+            .map_err(StdError::overflow)?
+            .atomics(), 
+        price.atomics());
+    
+    single_liquidation.coll_gas_compensation =  coll_to_offset
+        .atomics()
+        .checked_div(Uint128::from((PERCENT_DIVISOR * 10u8.pow(18)) as u128 ) )
+        .map_err(StdError::divide_by_zero)?;    
+    single_liquidation.ultra_gas_compensation = ULTRA_GAS_COMPENSATE;
+    single_liquidation.debt_to_offset = entire_trove_debt;
+    single_liquidation.coll_to_send_to_sp = coll_to_offset
+        .checked_sub(Decimal::new(single_liquidation.ultra_gas_compensation))
+        .map_err(StdError::overflow)?
+        .atomics()
+        .checked_div(Uint128::from(10u8.pow(18) as u128))
+        .map_err(StdError::divide_by_zero)?;
+    single_liquidation.coll_surplus = entire_trove_coll
+        .checked_sub(coll_to_offset
+            .atomics()
+            .checked_div(Uint128::from(10u8.pow(18) as u128))
+            .map_err(StdError::divide_by_zero)?
+        )
+        .map_err(StdError::overflow)?;
+    
+    Ok(single_liquidation)
+}
+
+fn add_liquidation_values_to_totals(
+    old_totals: LiquidationTotals,
+    single_liquidation: LiquidationValues
+) -> Result<LiquidationTotals, StdError> {
+    Ok(LiquidationTotals{
+        total_coll_gas_compensation: old_totals.total_coll_gas_compensation
+            .checked_add(single_liquidation.coll_gas_compensation)
+            .map_err(StdError::overflow)?,
+        total_ultra_gas_compensation: old_totals.total_ultra_gas_compensation
+            .checked_add(single_liquidation.ultra_gas_compensation)
+            .map_err(StdError::overflow)?,
+        total_debt_in_sequence: old_totals.total_debt_in_sequence
+            .checked_add(single_liquidation.entire_trove_debt)
+            .map_err(StdError::overflow)?,
+        total_coll_in_sequence: old_totals.total_coll_in_sequence
+            .checked_add(single_liquidation.entire_trove_coll)
+            .map_err(StdError::overflow)?,
+        total_debt_to_offset: old_totals.total_debt_to_offset
+            .checked_add(single_liquidation.debt_to_offset)
+            .map_err(StdError::overflow)?,
+        total_coll_to_send_to_sp: old_totals.total_coll_to_send_to_sp
+            .checked_add(single_liquidation.coll_to_send_to_sp)
+            .map_err(StdError::overflow)?,
+        total_debt_to_redistribute: old_totals.total_debt_to_redistribute
+            .checked_add(single_liquidation.debt_to_redistribute)
+            .map_err(StdError::overflow)?,
+        total_coll_to_redistribute: old_totals.total_coll_to_redistribute
+            .checked_add(single_liquidation.coll_to_redistribute)
+            .map_err(StdError::overflow)?,
+        total_coll_surplus: old_totals.total_coll_surplus
+            .checked_add(single_liquidation.coll_surplus)
+            .map_err(StdError::overflow)?
+    })
+}
+
+fn redistribute_debt_and_coll(
+    deps: DepsMut,
+    debt: Uint128,
+    coll: Uint128
+) -> Result<Vec<CosmosMsg>, ContractError> {
+    if debt.is_zero() {
+        return Ok(vec![])
+    }
+    let mut manager = MANAGER.load(deps.storage)?;
+    /*
+        * Add distributed coll and debt rewards-per-unit-staked to the running totals. Division uses a "feedback"
+        * error correction, to keep the cumulative error low in the running totals L_ETH and L_LUSDDebt:
+        *
+        * 1) Form numerators which compensate for the floor division errors that occurred the last time this
+        * function was called.
+        * 2) Calculate "per-unit-staked" ratios.
+        * 3) Multiply each ratio back by its denominator, to reveal the current floor division error.
+        * 4) Store these errors for use in the next correction when this function is called.
+        * 5) Note: static analysis tools complain about this "division before multiplication", however, it is intended.
+        */
+    
+        let juno_numerator = coll
+            .checked_add(manager.last_juno_error_redistribution)
+            .map_err(StdError::overflow)?;
+        let ultra_debt_numerator = debt
+            .checked_add(manager.last_ultra_debt_error_redistribution)
+            .map_err(StdError::overflow)?;
+        
+        // Get the per-unit-staked terms
+        let juno_reward_per_unit_stake = Decimal::from_ratio(
+            juno_numerator, manager.total_stake);
+        let ultra_debt_reward_per_unit_stake = Decimal::from_ratio(
+            ultra_debt_numerator, manager.total_stake); 
+        
+        manager.last_juno_error_redistribution = juno_numerator
+            .checked_sub(juno_reward_per_unit_stake
+                .checked_mul(Decimal::new(manager.total_stake))
+                .map_err(StdError::overflow)?
+                .atomics()
+                .checked_div(Uint128::from(10u128.pow(18)))
+                .map_err(StdError::divide_by_zero)?
+            ).map_err(StdError::overflow)?;
+        
+        manager.last_ultra_debt_error_redistribution = juno_numerator
+            .checked_sub(ultra_debt_reward_per_unit_stake
+                .checked_mul(Decimal::new(manager.total_stake))
+                .map_err(StdError::overflow)?
+                .atomics()
+                .checked_div(Uint128::from(10u128.pow(18)))
+                .map_err(StdError::divide_by_zero)?
+            ).map_err(StdError::overflow)?;
+        
+        // Add per-unit-staked terms to the running totals
+        manager.total_liquidation_juno = manager.total_liquidation_juno
+            .checked_add(
+                juno_reward_per_unit_stake
+                    .atomics()
+                    .checked_div(Uint128::from(10u128.pow(18)))
+                    .map_err(StdError::divide_by_zero)?
+            ).map_err(StdError::overflow)?;
+    Ok(vec![])
+}
 pub fn is_valid_first_redemption_hint(
     deps: Deps, 
     sorted_troves_addr: Addr, 
     first_redemption_hint: Option<Addr>, 
-    price: Decimal256
+    price: Decimal
 ) -> StdResult<bool> { 
     if first_redemption_hint.is_none() {
         return Ok(false);
@@ -1127,48 +1829,39 @@ pub fn get_pending_ultra_debt_reward(deps: Deps, borrower_addr: Addr) -> StdResu
     Ok(pending_ultra_debt_reward)
 }
 
-pub fn get_tcr(deps: Deps, price: Decimal256, default_pool_addr: Addr, active_pool_addr: Addr) -> StdResult<Decimal256>{
-    let entire_system_coll = {
-        let active_coll: Uint128 = deps.querier
-            .query_wasm_smart(
-                active_pool_addr.to_string(),
-                &ultra_base::active_pool::QueryMsg::GetJUNO {  }
-            )?;
-        let liquidated_coll: Uint128 = deps.querier
-            .query_wasm_smart(
-                default_pool_addr.to_string(), 
-                &ultra_base::default_pool::QueryMsg::GetJUNO {  }
-            )?;
-        active_coll.checked_add(liquidated_coll).map_err(StdError::overflow)?
-    };
-
-    let entire_system_debt = {
-        let active_debt: Uint128 = deps.querier
-            .query_wasm_smart(
-                default_pool_addr.to_string(), 
-                &ultra_base::default_pool::QueryMsg::GetULTRADebt {  }
-            )?;
-        let closed_debt: Uint128 = deps.querier
-            .query_wasm_smart(
-                active_pool_addr.to_string(),
-                &ultra_base::active_pool::QueryMsg::GetULTRADebt {  }
-            )?;
-        active_debt.checked_add(closed_debt).map_err(StdError::overflow)?
-    };
-
-    compute_cr(entire_system_coll, entire_system_debt, price)
-}
-
-pub fn get_current_icr(deps: Deps, borrower: String, price: Decimal256) -> StdResult<Decimal256>{
+pub fn get_current_icr(deps: Deps, borrower: String, price: Decimal) -> StdResult<Decimal>{
     let borrower_addr = deps.api.addr_validate(&borrower)?;
     let (current_juno, current_ultra_debt) = current_trove_amounts(deps, borrower_addr)?;
 
     Ok(compute_cr(current_juno, current_ultra_debt, price)?)
 }
 
-pub fn get_current_nominal_icr(deps: Deps, borrower: String) -> StdResult<Decimal256>{
+pub fn get_current_nominal_icr(deps: Deps, borrower: String) -> StdResult<Decimal>{
     let borrower_addr = deps.api.addr_validate(&borrower)?;
     let (current_juno, current_ultra_debt) = current_trove_amounts(deps, borrower_addr)?;
 
     Ok(compute_nominal_cr(current_juno, current_ultra_debt)?)
+}
+
+pub fn get_entire_debt_and_coll(deps: Deps, borrower_addr: Addr) -> StdResult<EntireDebtAndCollResponse> {
+    let trove_idx = TROVE_OWNER_IDX.load(deps.storage, borrower_addr.clone())?;
+    let (_, trove) = TROVES.load(deps.storage, trove_idx.to_string())?;
+
+    let mut debt = trove.debt;
+    let mut coll = trove.coll;
+
+    let pending_ultra_debt_reward = get_pending_ultra_debt_reward(deps, borrower_addr.clone())?;
+    let pending_juno_reward = get_pending_juno_reward(deps, borrower_addr)?;
+
+    debt = debt.checked_add(pending_ultra_debt_reward)
+        .map_err(StdError::overflow)?;
+    coll = coll.checked_add(pending_juno_reward)
+        .map_err(StdError::overflow)?;
+
+    Ok(EntireDebtAndCollResponse{
+        debt,
+        coll,
+        pending_ultra_debt_reward,
+        pending_juno_reward
+    })
 }
